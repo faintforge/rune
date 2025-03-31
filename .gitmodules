@@ -1,0 +1,3 @@
+[submodule "spire"]
+	path = spire
+	url = git@github.com:faintforge/spire.git

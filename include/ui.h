@@ -91,6 +91,8 @@ extern void ui_push_font(Font* value);
 extern void ui_push_font_size(u32 value);
 extern void ui_push_flow(UIAxis value);
 extern void ui_push_parent(UIWidget* value);
+extern void ui_push_fixed_x(f32 value);
+extern void ui_push_fixed_y(f32 value);
 
 extern UISize ui_pop_width(void);
 extern UISize ui_pop_height(void);
@@ -100,6 +102,8 @@ extern Font* ui_pop_font(void);
 extern u32 ui_pop_font_size(void);
 extern UIAxis ui_pop_flow(void);
 extern UIWidget* ui_pop_parent(void);
+extern f32 ui_pop_fixed_x(void);
+extern f32 ui_pop_fixed_y(void);
 
 extern void ui_next_width(UISize value);
 extern void ui_next_height(UISize value);
@@ -109,6 +113,8 @@ extern void ui_next_font(Font* value);
 extern void ui_next_font_size(u32 value);
 extern void ui_next_flow(UIAxis value);
 extern void ui_next_parent(UIWidget* value);
+extern void ui_next_fixed_x(f32 value);
+extern void ui_next_fixed_y(f32 value);
 
 extern UISize ui_top_width(void);
 extern UISize ui_top_height(void);
@@ -118,3 +124,5 @@ extern Font* ui_top_font(void);
 extern u32 ui_top_font_size(void);
 extern UIAxis ui_top_flow(void);
 extern UIWidget* ui_top_parent(void);
+extern f32 ui_top_fixed_x(void);
+extern f32 ui_top_fixed_y(void);

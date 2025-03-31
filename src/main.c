@@ -6,8 +6,6 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
-#define em(value) (value * 16.0f)
-
 i32 main(void) {
     sp_init(SP_CONFIG_DEFAULT);
     glfwInit();
@@ -51,7 +49,7 @@ i32 main(void) {
             .fg = sp_v4s(1.0f),
             .bg = sp_v4s(1.0f),
             .font = font,
-            .font_size = em(3),
+            .font_size = 24,
             .flow = UI_AXIS_VERTICAL,
         });
 
@@ -76,7 +74,7 @@ i32 main(void) {
                 UI_WIDGET_FLAG_DRAW_BACKGROUND);
         ui_push_parent(container);
 
-        ui_next_font_size(em(2));
+        ui_next_font_size(32);
         ui_next_width((UISize) {
                 .kind = UI_SIZE_KIND_TEXT,
                 .strictness = 1.0f,
@@ -101,6 +99,17 @@ i32 main(void) {
         ui_next_height((UISize) { .kind = UI_SIZE_KIND_TEXT, .strictness = 1.0f });
         ui_widget(sp_str_lit("Another one"),
                 UI_WIDGET_FLAG_DRAW_TEXT);
+
+        ui_next_fixed_x(128.0f);
+        ui_next_fixed_y(128.0f);
+        ui_next_width((UISize) { .kind = UI_SIZE_KIND_PIXELS, .value = 128.0f, .strictness = 1.0f });
+        ui_next_height((UISize) { .kind = UI_SIZE_KIND_PIXELS, .value = 128.0f, .strictness = 1.0f });
+        ui_next_bg(sp_v4(0.0f, 0.0f, 0.5f, 1.0f));
+        ui_widget(sp_str_lit("Floating Box"),
+                UI_WIDGET_FLAG_DRAW_TEXT |
+                UI_WIDGET_FLAG_DRAW_BACKGROUND |
+                UI_WIDGET_FLAG_DRAW_FLOATING);
+
 
         ui_end();
 

@@ -240,8 +240,7 @@ void renderer_draw(Renderer* renderer, RenderBox box) {
     renderer->curr_quad++;
 }
 
-void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font, u32 size, SP_Vec4 color) {
-    font_set_size(font, size);
+void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font, SP_Vec4 color) {
     FontMetrics metrics = font_get_metrics(font);
     SP_Vec2 gpos = pos;
     gpos.y += metrics.ascent;

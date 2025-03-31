@@ -15,7 +15,9 @@
     X(Font, font, Font*) \
     X(FontSize, font_size, u32) \
     X(Flow, flow, UIAxis) \
-    X(Parent, parent, UIWidget*)
+    X(Parent, parent, UIWidget*) \
+    X(FixedX, fixed_x, f32) \
+    X(FixedY, fixed_y, f32)
 
 #define X(name_upper, name_lower, type) \
     typedef struct UI##name_upper##Node UI##name_upper##Node; \
@@ -113,6 +115,8 @@ void ui_begin(SP_Ivec2 container_size) {
     ui_push_font_size(ctx.default_style_stack.font_size);
     ui_push_flow(ctx.default_style_stack.flow);
     ui_push_parent(&ctx.container);
+    ui_push_fixed_x(0.0f);
+    ui_push_fixed_y(0.0f);
 }
 
 static void build_fixed_sizes(UIWidget* widget) {
@@ -158,8 +162,10 @@ static void build_child_sizes(UIWidget* widget) {
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
         if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
             for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-                child_sum.elements[widget->flow] += curr_child->computed_size.elements[widget->flow];
-                child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_size.elements[!widget->flow]);
+                if (!(curr_child->flags & UI_WIDGET_FLAG_DRAW_FLOATING_X << widget->flow)) {
+                    child_sum.elements[widget->flow] += curr_child->computed_size.elements[widget->flow];
+                    child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_size.elements[!widget->flow]);
+                }
             }
             break;
         }
@@ -177,13 +183,19 @@ static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
         return;
     }
 
-    widget->computed_relative_position = relative_position;
-    if (widget->parent == NULL) {
-        widget->computed_absolute_position = relative_position;
-    } else {
-        widget->computed_absolute_position = sp_v2_add(widget->parent->computed_absolute_position, relative_position);
-        UIAxis flow = widget->parent->flow;
-        relative_position.elements[flow] += widget->computed_size.elements[flow];
+    for (UIAxis axis = 0; axis < UI_AXIS_COUNT; axis++) {
+        if (!(widget->flags & UI_WIDGET_FLAG_DRAW_FLOATING_X << axis)) {
+            widget->computed_relative_position = relative_position;
+            if (widget->parent == NULL) {
+                widget->computed_absolute_position.elements[axis] = relative_position.elements[axis];
+            } else {
+                widget->computed_absolute_position.elements[axis] = widget->parent->computed_absolute_position.elements[axis] + relative_position.elements[axis];
+                UIAxis flow = widget->parent->flow;
+                if (flow == axis) {
+                    relative_position.elements[flow] += widget->computed_size.elements[flow];
+                }
+            }
+        }
     }
 
     build_positions(widget->next, relative_position);
@@ -213,11 +225,18 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
     }
 
     if (widget->flags & UI_WIDGET_FLAG_DRAW_TEXT) {
+        font_set_size(widget->font, widget->font_size);
+        FontMetrics metrics = font_get_metrics(widget->font);
+
+        // Center text vertically
+        SP_Vec2 pos = widget->computed_absolute_position;
+        pos.y += widget->computed_size.y / 2.0f;
+        pos.y -= (metrics.ascent - metrics.descent) / 2.0f;
+
         renderer_draw_text(renderer,
-                widget->computed_absolute_position,
+                pos,
                 widget->text,
                 widget->font,
-                widget->font_size,
                 widget->fg);
     }
 
@@ -281,6 +300,7 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
             ui_top_width(),
             ui_top_height(),
         },
+        .computed_absolute_position = sp_v2(ui_top_fixed_x(), ui_top_fixed_y()),
 
         .bg = ui_top_bg(),
         .fg = ui_top_fg(),

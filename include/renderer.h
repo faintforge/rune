@@ -41,4 +41,4 @@ extern void renderer_destroy(Renderer* renderer);
 extern void renderer_begin(Renderer* renderer, SP_Ivec2 screen_size);
 extern void renderer_end(Renderer* renderer);
 extern void renderer_draw(Renderer* renderer, RenderBox box);
-extern void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font, u32 size, SP_Vec4 color);
+extern void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font, SP_Vec4 color);

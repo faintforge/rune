@@ -262,5 +262,8 @@ void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font
                 .uv = {glyph.uv[0], glyph.uv[1]},
             });
         gpos.x += glyph.advance;
+        if (i > 0) {
+            gpos.x += font_get_kerning(font, text.data[i-1], text.data[i]);
+        }
     }
 }

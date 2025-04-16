@@ -82,6 +82,8 @@ void ui_init(UIStyleStack default_style_stack) {
         },
         .default_style_stack = default_style_stack,
     };
+    sp_arena_tag(ctx.arenas[0], sp_str_lit("ui-0"));
+    sp_arena_tag(ctx.arenas[1], sp_str_lit("ui-1"));
 
     // generate_header_functions();
 }

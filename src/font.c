@@ -115,19 +115,19 @@ QuadtreeAtlasNode* quadtree_atlas_insert_helper(SP_Arena* arena, QuadtreeAtlasNo
         SP_Ivec2 half_size = sp_iv2_divs(node->size, 2);
         node->children[0] = (QuadtreeAtlasNode) {
             .size = half_size,
-                .pos = node->pos,
+            .pos = node->pos,
         };
         node->children[1] = (QuadtreeAtlasNode) {
             .size = half_size,
-                .pos = sp_iv2(node->pos.x + half_size.x, node->pos.y),
+            .pos = sp_iv2(node->pos.x + half_size.x, node->pos.y),
         };
         node->children[2] = (QuadtreeAtlasNode) {
             .size = half_size,
-                .pos = sp_iv2(node->pos.x, node->pos.y + half_size.y),
+            .pos = sp_iv2(node->pos.x, node->pos.y + half_size.y),
         };
         node->children[3] = (QuadtreeAtlasNode) {
             .size = half_size,
-                .pos = sp_iv2_add(node->pos, half_size),
+            .pos = sp_iv2_add(node->pos, half_size),
         };
     }
 
@@ -582,8 +582,8 @@ SP_Vec2 font_measure_string(Font* font, SP_Str str) {
         } else {
             size.x += glyph.size.x;
         }
-        if (i > 0) {
-            size.x += font_get_kerning(font, str.data[i-1], str.data[i]);
+        if (i < str.len - 1) {
+            size.x += font_get_kerning(font, str.data[i], str.data[i+1]);
         }
     }
 

@@ -82,6 +82,29 @@ extern void ui_draw(Renderer* renderer);
 extern SP_Arena* ui_get_arena(void);
 extern UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags);
 
+#define UI_SIZE_PIXELS(VALUE, STRICTNESS) \
+    ((UISize) { \
+        .kind = UI_SIZE_KIND_PIXELS, \
+        .value = VALUE, \
+        .strictness = STRICTNESS \
+    })
+#define UI_SIZE_TEXT(STRICTNESS) \
+    ((UISize) { \
+        .kind = UI_SIZE_KIND_TEXT, \
+        .strictness = STRICTNESS \
+    })
+#define UI_SIZE_CHILDREN(STRICTNESS) \
+    ((UISize) { \
+        .kind = UI_SIZE_KIND_CHILDREN, \
+        .strictness = STRICTNESS \
+    })
+#define UI_SIZE_PERCENT(VALUE, STRICTNESS) \
+    ((UISize) { \
+        .kind = UI_SIZE_KIND_PERCENT, \
+        .value = VALUE, \
+        .strictness = STRICTNESS \
+    })
+
 // Stack operations
 extern void ui_push_width(UISize value);
 extern void ui_push_height(UISize value);

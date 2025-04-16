@@ -6,10 +6,54 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+static void column_start(void) {
+    ui_next_width(UI_SIZE_CHILDREN(1.0f));
+    ui_next_height(UI_SIZE_CHILDREN(1.0f));
+    ui_next_flow(UI_AXIS_VERTICAL);
+    UIWidget* column = ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
+    ui_push_parent(column);
+}
+
+static void column_end(void) {
+    ui_pop_parent();
+}
+
+static void row_start(void) {
+    ui_next_width(UI_SIZE_CHILDREN(1.0f));
+    ui_next_height(UI_SIZE_CHILDREN(1.0f));
+    ui_next_flow(UI_AXIS_HORIZONTAL);
+    UIWidget* row = ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
+    ui_push_parent(row);
+}
+
+static void row_end(void) {
+    ui_pop_parent();
+}
+
+#define DEFER(BEGIN, END) for (b8 _i_ = (BEGIN, false); !_i_; _i_ = (END, true))
+#define column() DEFER(column_start(), column_end())
+#define row() DEFER(row_start(), row_end())
+
+static UIWidget* spacer(UISize size) {
+    UIAxis flow = ui_top_parent()->flow;
+    switch (flow) {
+        case UI_AXIS_HORIZONTAL:
+            ui_next_width(size);
+            break;
+        case UI_AXIS_VERTICAL:
+            ui_next_height(size);
+            break;
+        case UI_AXIS_COUNT:
+            break;
+    }
+    return ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
+}
+
 i32 main(void) {
     sp_init(SP_CONFIG_DEFAULT);
     glfwInit();
     SP_Arena* arena = sp_arena_create();
+    sp_arena_tag(arena, sp_str_lit("main"));
 
     // Create window
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -29,8 +73,8 @@ i32 main(void) {
 
     // Create renderer
     Renderer renderer = renderer_create(arena);
-    Font* font = font_create(arena, sp_str_lit("assets/Roboto/Roboto-Regular.ttf"));
-    // Font* font = font_create(arena, sp_str_lit("assets/Spline_Sans/static/SplineSans-Light.ttf"));
+    // Font* font = font_create(arena, sp_str_lit("assets/Roboto/Roboto-Regular.ttf"));
+    Font* font = font_create(arena, sp_str_lit("assets/Spline_Sans/static/SplineSans-Regular.ttf"));
     // Font* font = font_create(arena, sp_str_lit("assets/Tiny5/Tiny5-Regular.ttf"));
 
     ui_init((UIStyleStack) {
@@ -61,55 +105,45 @@ i32 main(void) {
         // Build UI
         ui_begin(screen_size);
 
-        ui_next_bg(sp_v4(0.5f, 0.0f, 0.0f, 1.0f));
-        ui_next_width((UISize) {
-                .kind = UI_SIZE_KIND_CHILDREN,
-                .strictness = 1.0f,
-            });
-        ui_next_height((UISize) {
-                .kind = UI_SIZE_KIND_CHILDREN,
-                .strictness = 1.0f,
-            });
-        UIWidget* container = ui_widget(sp_str_lit("container"),
-                UI_WIDGET_FLAG_DRAW_BACKGROUND);
+        ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
+        ui_next_width(UI_SIZE_CHILDREN(1.0f));
+        ui_next_height(UI_SIZE_CHILDREN(1.0f));
+        UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
         ui_push_parent(container);
+        {
+            column() {
+                spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+                row() {
+                    spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
 
-        ui_next_font_size(32);
-        ui_next_width((UISize) {
-                .kind = UI_SIZE_KIND_TEXT,
-                .strictness = 1.0f,
-            });
-        ui_next_height((UISize) {
-                .kind = UI_SIZE_KIND_TEXT,
-                .strictness = 1.0f,
-            });
-        ui_widget(sp_str_lit("The quick brown fox jumps over the lazy dog!##this is just the id"),
-                UI_WIDGET_FLAG_DRAW_TEXT);
+                    ui_push_width(UI_SIZE_TEXT(1.0f));
+                    ui_push_height(UI_SIZE_TEXT(1.0f));
 
-        ui_next_flow(UI_AXIS_HORIZONTAL);
-        ui_next_bg(sp_v4(0.0f, 0.5f, 0.0f, 1.0f));
-        UIWidget* row = ui_widget(sp_str_lit("row"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
-        ui_push_parent(row);
+                    column() {
+                        ui_widget(sp_str_lit("Abc"), UI_WIDGET_FLAG_DRAW_TEXT);
+                        ui_widget(sp_str_lit("Wow"), UI_WIDGET_FLAG_DRAW_TEXT);
+                        spacer(UI_SIZE_TEXT(1.0f));
+                        ui_widget(sp_str_lit("I skipped the last row!"), UI_WIDGET_FLAG_DRAW_TEXT);
+                    }
 
-        ui_next_width((UISize) { .kind = UI_SIZE_KIND_PIXELS, .value = 64.0f, .strictness = 1.0f });
-        ui_next_height((UISize) { .kind = UI_SIZE_KIND_TEXT, .strictness = 1.0f });
-        ui_widget(sp_str_lit("padding"), UI_WIDGET_FLAG_NONE);
+                    spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
 
-        ui_next_width((UISize) { .kind = UI_SIZE_KIND_TEXT, .strictness = 1.0f });
-        ui_next_height((UISize) { .kind = UI_SIZE_KIND_TEXT, .strictness = 1.0f });
-        ui_widget(sp_str_lit("Another one"),
-                UI_WIDGET_FLAG_DRAW_TEXT);
+                    column() {
+                        ui_widget(sp_str_lit("Another column!"), UI_WIDGET_FLAG_DRAW_TEXT);
+                        ui_widget(sp_str_lit("This is amazing."), UI_WIDGET_FLAG_DRAW_TEXT);
+                        ui_widget(sp_str_lit("I love this so much :3"), UI_WIDGET_FLAG_DRAW_TEXT);
+                        ui_widget(sp_str_lit("I'm so proud of myself :D"), UI_WIDGET_FLAG_DRAW_TEXT);
+                    }
 
-        ui_next_fixed_x(128.0f);
-        ui_next_fixed_y(128.0f);
-        ui_next_width((UISize) { .kind = UI_SIZE_KIND_PIXELS, .value = 128.0f, .strictness = 1.0f });
-        ui_next_height((UISize) { .kind = UI_SIZE_KIND_PIXELS, .value = 128.0f, .strictness = 1.0f });
-        ui_next_bg(sp_v4(0.0f, 0.0f, 0.5f, 1.0f));
-        ui_widget(sp_str_lit("Floating Box"),
-                UI_WIDGET_FLAG_DRAW_TEXT |
-                UI_WIDGET_FLAG_DRAW_BACKGROUND |
-                UI_WIDGET_FLAG_DRAW_FLOATING);
+                    ui_pop_width();
+                    ui_pop_height();
 
+                    spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+                }
+                spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+            }
+        }
+        ui_pop_parent();
 
         ui_end();
 
@@ -127,6 +161,8 @@ i32 main(void) {
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
+    sp_dump_arena_metrics();
 
     // Shutdown
     font_destroy(font);

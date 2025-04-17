@@ -312,7 +312,9 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
 
     // Bredth-first
     ui_draw_helper(renderer, widget->next);
+    // Depth-first
     ui_draw_helper(renderer, widget->child_first);
+    ui_draw_helper(renderer, widget->next);
 }
 
 void ui_draw(Renderer* renderer) {

@@ -41,6 +41,8 @@ struct UIContext {
     SP_HashMap* widget_map;
     UIMouse mouse;
 
+    UIWidget* focused_widget;
+
     // Styles
     UIStyleStack default_style_stack;
     LIST_STYLE_STACKS
@@ -117,6 +119,9 @@ void ui_begin(SP_Ivec2 container_size, UIMouse mouse) {
         .flags = UI_WIDGET_FLAG_FLOATING,
     };
     ctx.mouse = mouse;
+    if (!ctx.mouse.buttons[UI_MOUSE_BUTTON_LEFT].pressed) {
+        ctx.focused_widget = NULL;
+    }
 
     ui_push_width(ctx.default_style_stack.size[UI_AXIS_HORIZONTAL]);
     ui_push_height(ctx.default_style_stack.size[UI_AXIS_VERTICAL]);
@@ -310,8 +315,6 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
                 widget->fg);
     }
 
-    // Bredth-first
-    ui_draw_helper(renderer, widget->next);
     // Depth-first
     ui_draw_helper(renderer, widget->child_first);
     ui_draw_helper(renderer, widget->next);
@@ -425,15 +428,22 @@ UISignal ui_signal(UIWidget* widget) {
     f32 bottom = top + widget->computed_size.y;
 
     b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
-    b8 pressed = hovered && ctx.mouse.buttons[UI_MOUSE_BUTTON_LEFT];
+    b8 pressed = hovered && ctx.mouse.buttons[UI_MOUSE_BUTTON_LEFT].pressed;
+    if (pressed && ctx.focused_widget == NULL) {
+        ctx.focused_widget = widget;
+    }
+    b8 focused = widget == ctx.focused_widget;
+    b8 clicked = hovered && ctx.mouse.buttons[UI_MOUSE_BUTTON_LEFT].clicked;
     SP_Vec2 drag = sp_v2s(0.0f);
-    if (pressed) {
+    if (focused) {
         drag = ctx.mouse.pos_delta;
     }
 
     UISignal signal = {
         .hovered = hovered,
         .pressed = pressed,
+        .clicked = clicked,
+        .focused = focused,
         .drag = drag,
     };
     return signal;

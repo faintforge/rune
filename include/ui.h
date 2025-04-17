@@ -84,7 +84,10 @@ typedef enum UIMouseButton {
 
 typedef struct UIMouse UIMouse;
 struct UIMouse {
-    b8 buttons[UI_MOUSE_BUTTON_COUNT];
+    struct {
+        b8 pressed;
+        b8 clicked;
+    } buttons[UI_MOUSE_BUTTON_COUNT];
     SP_Vec2 pos;
     SP_Vec2 pos_delta;
     f32 scroll;
@@ -94,6 +97,8 @@ typedef struct UISignal UISignal;
 struct UISignal {
     b8 hovered;
     b8 pressed;
+    b8 clicked;
+    b8 focused;
     SP_Vec2 drag;
 };
 

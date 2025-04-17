@@ -49,6 +49,37 @@ static UIWidget* spacer(UISize size) {
     return ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
 }
 
+static UIMouse mouse = {0};
+static void reset_mouse(void) {
+    mouse.pos_delta = sp_v2s(0.0f);
+    mouse.scroll = 0.0f;
+}
+
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    switch (button) {
+        case GLFW_MOUSE_BUTTON_1:
+            mouse.buttons[UI_MOUSE_BUTTON_LEFT] = action;
+            break;
+        case GLFW_MOUSE_BUTTON_2:
+            mouse.buttons[UI_MOUSE_BUTTON_RIGHT] = action;
+            break;
+        case GLFW_MOUSE_BUTTON_3:
+            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE] = action;
+            break;
+    }
+}
+
+static void cursor_pos_callback(GLFWwindow* window, double xpos, double ypos) {
+    SP_Vec2 pos = sp_v2(xpos, ypos);
+    SP_Vec2 delta = sp_v2_sub(pos, mouse.pos);
+    mouse.pos = pos;
+    mouse.pos_delta = sp_v2_add(mouse.pos_delta, delta);
+}
+
+static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    mouse.scroll = yoffset;
+}
+
 i32 main(void) {
     sp_init(SP_CONFIG_DEFAULT);
     glfwInit();
@@ -62,6 +93,9 @@ i32 main(void) {
     glfwWindowHint(GLFW_RESIZABLE, false);
     GLFWwindow* window = glfwCreateWindow(800, 600, "Nuh Uh", NULL, NULL);
     glfwMakeContextCurrent(window);
+    glfwSetMouseButtonCallback(window, mouse_button_callback);
+    glfwSetCursorPosCallback(window, cursor_pos_callback);
+    glfwSetScrollCallback(window, scroll_callback);
 
     // Load GL functions
     gladLoadGL(glfwGetProcAddress);
@@ -103,6 +137,8 @@ i32 main(void) {
     f32 fps_timer = 0.0f;
     f32 last = sp_os_get_time();
 
+    SP_Vec2 window_pos = sp_v2s(128.0f);
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
         f32 curr = sp_os_get_time();
@@ -121,8 +157,9 @@ i32 main(void) {
         glfwGetFramebufferSize(window, &screen_size.x, &screen_size.y);
 
         // Build UI
-        ui_begin(screen_size);
+        ui_begin(screen_size, mouse);
 
+        // Top bar
         ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
         ui_next_width(UI_SIZE_PIXELS(screen_size.x, 1.0f));
         ui_next_height(UI_SIZE_CHILDREN(1.0f));
@@ -133,23 +170,64 @@ i32 main(void) {
             ui_push_width(UI_SIZE_TEXT(1.0f));
             ui_push_height(UI_SIZE_TEXT(1.0f));
 
-            spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+            ui_next_width(UI_SIZE_PIXELS(ui_top_font_size() * 4.0f, 1.0f));
+            ui_next_height(UI_SIZE_PIXELS(ui_top_font_size() * 2.0f, 1.0f));
+            ui_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
+            UIWidget* button = ui_widget(sp_str_lit("Button"), UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_DRAW_TEXT);
+            UISignal signal = ui_signal(button);
+            if (signal.hovered) {
+                button->bg = sp_v4(0.5f, 0.2f, 0.2f, 1.0);
+            }
+            if (signal.pressed) {
+                button->bg = sp_v4(0.2f, 0.2f, 0.5f, 1.0);
+            }
+
+            spacer(UI_SIZE_PARENT(1.0f, 0.0f));
+
+            ui_next_height(UI_SIZE_PARENT(1.0, 1.0));
+            ui_widget(sp_str_lit("Mouse:"), UI_WIDGET_FLAG_DRAW_TEXT);
+            spacer(UI_SIZE_PIXELS(8.0f, 1.0));
+            column() {
+                ui_widget(sp_str_pushf(ui_get_arena(), "Pos: (%.4f, %.4f)", mouse.pos.x, mouse.pos.y), UI_WIDGET_FLAG_DRAW_TEXT);
+                ui_widget(sp_str_pushf(ui_get_arena(), "Delta: (%.4f, %.4f)", mouse.pos_delta.x, mouse.pos_delta.y), UI_WIDGET_FLAG_DRAW_TEXT);
+                ui_widget(sp_str_pushf(ui_get_arena(), "Scroll: %.1f", mouse.scroll), UI_WIDGET_FLAG_DRAW_TEXT);
+            }
+
+            spacer(UI_SIZE_PARENT(1.0f, 0.0f));
+
             column() {
                 ui_widget(sp_str_pushf(ui_get_arena(), "FPS: %u", last_fps), UI_WIDGET_FLAG_DRAW_TEXT);
                 ui_widget(sp_str_pushf(ui_get_arena(), "Delta Time: %.4f", dt), UI_WIDGET_FLAG_DRAW_TEXT);
             }
-
-            spacer(UI_SIZE_PARENT(1.0, 0.0f));
-            ui_widget(sp_str_lit("More things"), UI_WIDGET_FLAG_DRAW_TEXT);
-
-            spacer(UI_SIZE_PARENT(1.0, 0.0f));
-            ui_widget(sp_str_lit("Right"), UI_WIDGET_FLAG_DRAW_TEXT);
             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
 
             ui_pop_width();
             ui_pop_height();
         }
         ui_pop_parent();
+
+        // Draggable window
+        ui_next_bg(sp_v4(0.2f, 0.2f, 0.3f, 1.0f));
+        ui_next_width(UI_SIZE_PIXELS(128.0f, 1.0f));
+        ui_next_height(UI_SIZE_PIXELS(128.0f, 1.0f));
+        ui_next_fixed_x(window_pos.x);
+        ui_next_fixed_y(window_pos.y);
+        UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##container"),
+                UI_WIDGET_FLAG_DRAW_BACKGROUND |
+                UI_WIDGET_FLAG_FLOATING |
+                UI_WIDGET_FLAG_DRAW_TEXT);
+        ui_push_parent(draggable);
+        {
+            ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
+            ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
+            UIWidget* drag_bar = ui_widget(sp_str_lit("##dragbar"), UI_WIDGET_FLAG_NONE);
+            UISignal signal = ui_signal(drag_bar);
+            if (signal.pressed) {
+                window_pos = sp_v2_add(window_pos, signal.drag);
+            }
+        }
+        ui_pop_parent();
+
 
         // ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
         // ui_next_width(UI_SIZE_CHILDREN(1.0f));
@@ -204,6 +282,7 @@ i32 main(void) {
         renderer_end(&renderer);
 
         glfwSwapBuffers(window);
+        reset_mouse();
         glfwPollEvents();
     }
 

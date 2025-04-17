@@ -33,9 +33,13 @@ LIST_STYLE_STACKS
 #define X(name_upper, name_lower, type) UI##name_upper##Node* name_lower##_stack;
 typedef struct UIContext UIContext;
 struct UIContext {
-    SP_Arena* arenas[2];
+    SP_Arena* arena;
+    SP_Arena* frame_arenas[2];
     UIWidget container;
     u64 current_frame;
+
+    SP_HashMap* widget_map;
+    UIMouse mouse;
 
     // Styles
     UIStyleStack default_style_stack;
@@ -77,21 +81,24 @@ static void generate_header_functions(void) {
 
 void ui_init(UIStyleStack default_style_stack) {
     ctx = (UIContext) {
-        .arenas = {
+        .arena = sp_arena_create(),
+        .frame_arenas = {
             sp_arena_create(),
             sp_arena_create(),
         },
         .default_style_stack = default_style_stack,
     };
-    sp_arena_tag(ctx.arenas[0], sp_str_lit("ui-0"));
-    sp_arena_tag(ctx.arenas[1], sp_str_lit("ui-1"));
+    sp_arena_tag(ctx.arena, sp_str_lit("ui-state"));
+    sp_arena_tag(ctx.frame_arenas[0], sp_str_lit("ui-frame-0"));
+    sp_arena_tag(ctx.frame_arenas[1], sp_str_lit("ui-frame-1"));
+
+    ctx.widget_map = sp_hm_new(sp_hm_desc_str(ctx.arena, 4096, UIWidget*));
 
     // generate_header_functions();
 }
 
-void ui_begin(SP_Ivec2 container_size) {
+void ui_begin(SP_Ivec2 container_size, UIMouse mouse) {
     SP_Arena* arena = ui_get_arena();
-    sp_arena_clear(arena);
 
     ctx.container = (UIWidget) {
         .id = sp_str_lit("(root_container)"),
@@ -107,8 +114,9 @@ void ui_begin(SP_Ivec2 container_size) {
                 .strictness = 1.0f,
             },
         },
-        .flags = UI_WIDGET_FLAG_DRAW_FLOATING,
+        .flags = UI_WIDGET_FLAG_FLOATING,
     };
+    ctx.mouse = mouse;
 
     ui_push_width(ctx.default_style_stack.size[UI_AXIS_HORIZONTAL]);
     ui_push_height(ctx.default_style_stack.size[UI_AXIS_VERTICAL]);
@@ -159,7 +167,7 @@ static SP_Vec2 sum_child_size(UIWidget* widget) {
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
         if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
             for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-                if (!(curr_child->flags & UI_WIDGET_FLAG_DRAW_FLOATING_X << widget->flow)) {
+                if (!(curr_child->flags & UI_WIDGET_FLAG_FLOATING_X << widget->flow)) {
                     child_sum.elements[widget->flow] += curr_child->computed_size.elements[widget->flow];
                     child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_size.elements[!widget->flow]);
                 }
@@ -242,7 +250,7 @@ static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
     }
 
     for (UIAxis axis = 0; axis < UI_AXIS_COUNT; axis++) {
-        if (!(widget->flags & UI_WIDGET_FLAG_DRAW_FLOATING_X << axis)) {
+        if (!(widget->flags & UI_WIDGET_FLAG_FLOATING_X << axis)) {
             widget->computed_relative_position = relative_position;
             if (widget->parent == NULL) {
                 widget->computed_absolute_position.elements[axis] = relative_position.elements[axis];
@@ -262,6 +270,9 @@ static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
 
 void ui_end(void) {
     ctx.current_frame++;
+
+    SP_Arena* arena = ui_get_arena();
+    sp_arena_clear(arena);
 
     build_fixed_sizes(&ctx.container);
     build_child_sizes(&ctx.container);
@@ -309,7 +320,7 @@ void ui_draw(Renderer* renderer) {
 }
 
 SP_Arena* ui_get_arena(void) {
-    return ctx.arenas[ctx.current_frame % sp_arrlen(ctx.arenas)];
+    return ctx.frame_arenas[ctx.current_frame % sp_arrlen(ctx.frame_arenas)];
 }
 
 static void parse_text(SP_Str text, SP_Str* id, SP_Str* display_text) {
@@ -340,13 +351,33 @@ static void parse_text(SP_Str text, SP_Str* id, SP_Str* display_text) {
     }
 }
 
+static UIWidget* widget_from_id(SP_Str* id) {
+    UIWidget* widget = sp_hm_get(ctx.widget_map, *id, UIWidget*);
+
+    // TODO: Add free list for no-id widgets and widgets that haven't been
+    // touched for two generations.
+
+    // New ID
+    if (widget == NULL) {
+        widget = sp_arena_push_no_zero(ctx.arena, sizeof(UIWidget));
+        sp_hm_insert(ctx.widget_map, *id, widget);
+    }
+    // Duplicate ID
+    else if (widget->last_touched == ctx.current_frame) {
+        *id = sp_str_lit("");
+        widget = sp_arena_push_no_zero(ctx.arena, sizeof(UIWidget));
+    }
+
+    return widget;
+}
+
 UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
     SP_Arena* arena = ui_get_arena();
-    UIWidget* widget = sp_arena_push_no_zero(arena, sizeof(UIWidget));
-
     SP_Str text_copy = sp_str_pushf(arena, "%.*s", text.len, text.data);
     SP_Str id, display_text;
     parse_text(text_copy, &id, &display_text);
+
+    UIWidget* widget = widget_from_id(&id);
 
     UIWidget* parent = ui_top_parent();
     *widget = (UIWidget) {
@@ -354,12 +385,16 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
         .flags = flags,
         .id = id,
         .text = display_text,
+        .last_touched = ctx.current_frame,
 
         .size = {
             ui_top_width(),
             ui_top_height(),
         },
-        .computed_absolute_position = sp_v2(ui_top_fixed_x(), ui_top_fixed_y()),
+
+        // Retain possible state from the last frame
+        .computed_absolute_position = widget->computed_absolute_position,
+        .computed_size = widget->computed_size,
 
         .bg = ui_top_bg(),
         .fg = ui_top_fg(),
@@ -367,9 +402,39 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
         .font_size = ui_top_font_size(),
         .flow = ui_top_flow(),
     };
+
+    if (flags & UI_WIDGET_FLAG_FLOATING_X) {
+        widget->computed_absolute_position.x = ui_top_fixed_x();
+    }
+
+    if (flags & UI_WIDGET_FLAG_FLOATING_Y) {
+        widget->computed_absolute_position.y = ui_top_fixed_y();
+    }
+
     sp_dll_push_back(parent->child_first, parent->child_last, widget);
-    // sp_debug("%.*s", parent->id.len, parent->id.data);
     return widget;
+}
+
+UISignal ui_signal(UIWidget* widget) {
+    SP_Vec2 mpos = ctx.mouse.pos;
+    f32 left = widget->computed_absolute_position.x;
+    f32 right = left + widget->computed_size.x;
+    f32 top = widget->computed_absolute_position.y;
+    f32 bottom = top + widget->computed_size.y;
+
+    b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
+    b8 pressed = hovered && ctx.mouse.buttons[UI_MOUSE_BUTTON_LEFT];
+    SP_Vec2 drag = sp_v2s(0.0f);
+    if (pressed) {
+        drag = ctx.mouse.pos_delta;
+    }
+
+    UISignal signal = {
+        .hovered = hovered,
+        .pressed = pressed,
+        .drag = drag,
+    };
+    return signal;
 }
 
 // Push impls

@@ -7,10 +7,10 @@ typedef enum UIWidgetFlags {
     UI_WIDGET_FLAG_NONE            = 0,
     UI_WIDGET_FLAG_DRAW_TEXT       = 1 << 0,
     UI_WIDGET_FLAG_DRAW_BACKGROUND = 1 << 1,
-    UI_WIDGET_FLAG_DRAW_FLOATING_X = 1 << 2,
-    UI_WIDGET_FLAG_DRAW_FLOATING_Y = 1 << 3,
-    UI_WIDGET_FLAG_DRAW_FLOATING   = UI_WIDGET_FLAG_DRAW_FLOATING_X |
-                                     UI_WIDGET_FLAG_DRAW_FLOATING_Y
+    UI_WIDGET_FLAG_FLOATING_X      = 1 << 2,
+    UI_WIDGET_FLAG_FLOATING_Y      = 1 << 3,
+    UI_WIDGET_FLAG_FLOATING        = UI_WIDGET_FLAG_FLOATING_X |
+                                     UI_WIDGET_FLAG_FLOATING_Y
 } UIWidgetFlags;
 
 typedef enum UIAxis {
@@ -55,6 +55,7 @@ struct UIWidget {
 
     SP_Str id;
     SP_Str text;
+    u32 last_touched;
 
     // Style
     SP_Vec4 bg;
@@ -74,13 +75,37 @@ struct UIStyleStack {
     UIAxis flow;
 };
 
+typedef enum UIMouseButton {
+    UI_MOUSE_BUTTON_LEFT,
+    UI_MOUSE_BUTTON_MIDDLE,
+    UI_MOUSE_BUTTON_RIGHT,
+    UI_MOUSE_BUTTON_COUNT,
+} UIMouseButton;
+
+typedef struct UIMouse UIMouse;
+struct UIMouse {
+    b8 buttons[UI_MOUSE_BUTTON_COUNT];
+    SP_Vec2 pos;
+    SP_Vec2 pos_delta;
+    f32 scroll;
+};
+
+typedef struct UISignal UISignal;
+struct UISignal {
+    b8 hovered;
+    b8 pressed;
+    SP_Vec2 drag;
+};
+
 extern void ui_init(UIStyleStack default_style_stack);
-extern void ui_begin(SP_Ivec2 container_size);
+extern void ui_begin(SP_Ivec2 container_size, UIMouse mouse);
 extern void ui_end(void);
 extern void ui_draw(Renderer* renderer);
 
 extern SP_Arena* ui_get_arena(void);
 extern UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags);
+
+extern UISignal ui_signal(UIWidget* widget);
 
 #define UI_SIZE_PIXELS(VALUE, STRICTNESS) \
     ((UISize) { \

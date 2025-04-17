@@ -169,15 +169,10 @@ static void build_fixed_sizes(UIWidget* widget) {
 
 static SP_Vec2 sum_child_size(UIWidget* widget) {
     SP_Vec2 child_sum = sp_v2s(0.0f);
-    for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
-        if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
-            for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-                if (!(curr_child->flags & UI_WIDGET_FLAG_FLOATING_X << widget->flow)) {
-                    child_sum.elements[widget->flow] += curr_child->computed_size.elements[widget->flow];
-                    child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_size.elements[!widget->flow]);
-                }
-            }
-            break;
+    for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
+        if (!(curr_child->flags & UI_WIDGET_FLAG_FLOATING_X << widget->flow)) {
+            child_sum.elements[widget->flow] += curr_child->computed_size.elements[widget->flow];
+            child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_size.elements[!widget->flow]);
         }
     }
     return child_sum;
@@ -192,7 +187,14 @@ static void build_child_sizes(UIWidget* widget) {
     build_child_sizes(widget->child_first);
     build_child_sizes(widget->next);
 
-    SP_Vec2 child_sum = sum_child_size(widget);
+    SP_Vec2 child_sum = sp_v2s(0.0f);
+    for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
+        if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
+            child_sum = sum_child_size(widget);
+            break;
+        }
+    }
+
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
         if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
             widget->computed_size.elements[i] = child_sum.elements[i];
@@ -206,14 +208,15 @@ static void build_parent_sizes(UIWidget* widget) {
     }
 
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
-        if (widget->size[i].kind == UI_SIZE_KIND_PARENT && widget->parent != NULL) {
+        if (widget->size[i].kind == UI_SIZE_KIND_PARENT) {
+            sp_assert(widget->parent != NULL, "Only (root-container) should have a NULL parent.");
             widget->computed_size.elements[i] = widget->parent->computed_size.elements[i] * widget->size[i].value;
         }
     }
 
     // Bredth-first
-    build_parent_sizes(widget->next);
     build_parent_sizes(widget->child_first);
+    build_parent_sizes(widget->next);
 }
 
 static void solve_size_violations(UIWidget* widget) {
@@ -237,7 +240,13 @@ static void solve_size_violations(UIWidget* widget) {
             }
 
             if (total_budget < violation_amount) {
-                sp_warn("UI sizing violations exceeds budget.");
+                sp_debug("%.*s - violation = %f, child_sum = %f, widget_size = %f",
+                        widget->id.len,
+                        widget->id.data,
+                        violation_amount,
+                        child_sum.elements[i],
+                        widget->computed_size.elements[i]);
+                sp_warn("Widget '%.*s' has a sizing violation of %.0f pixels on the %s-axis.", widget->id.len, widget->id.data, violation_amount - total_budget, i ? "y" : "x");
             }
 
             for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {

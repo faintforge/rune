@@ -7,8 +7,8 @@
 #include <GLFW/glfw3.h>
 
 static void column_start(void) {
-    ui_next_width(UI_SIZE_CHILDREN(1.0f));
-    ui_next_height(UI_SIZE_CHILDREN(1.0f));
+    // ui_next_width(UI_SIZE_CHILDREN(1.0f));
+    // ui_next_height(UI_SIZE_CHILDREN(1.0f));
     ui_next_flow(UI_AXIS_VERTICAL);
     UIWidget* column = ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
     ui_push_parent(column);
@@ -19,8 +19,8 @@ static void column_end(void) {
 }
 
 static void row_start(void) {
-    ui_next_width(UI_SIZE_CHILDREN(1.0f));
-    ui_next_height(UI_SIZE_CHILDREN(1.0f));
+    // ui_next_width(UI_SIZE_CHILDREN(1.0f));
+    // ui_next_height(UI_SIZE_CHILDREN(1.0f));
     ui_next_flow(UI_AXIS_HORIZONTAL);
     UIWidget* row = ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
     ui_push_parent(row);
@@ -39,8 +39,10 @@ static UIWidget* spacer(UISize size) {
     switch (flow) {
         case UI_AXIS_HORIZONTAL:
             ui_next_width(size);
+            ui_next_height(UI_SIZE_PIXELS(0.0f, 0.0f));
             break;
         case UI_AXIS_VERTICAL:
+            ui_next_width(UI_SIZE_PIXELS(0.0f, 0.0f));
             ui_next_height(size);
             break;
         case UI_AXIS_COUNT:
@@ -49,22 +51,47 @@ static UIWidget* spacer(UISize size) {
     return ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
 }
 
+static UIWidget* checkbox(SP_Str id, b8* value) {
+    // TODO: Add custom rendering functionality to widgets.
+    ui_next_width(UI_SIZE_PIXELS(32.0f, 1.0f));
+    ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
+    if (*value) {
+        ui_next_bg(sp_v4(0.2f, 0.2f, 0.2f, 1.0f));
+    } else {
+        ui_next_bg(sp_v4(0.75f, 0.75f, 0.75f, 1.0f));
+    }
+    UIWidget* checkbox = ui_widget(id, UI_WIDGET_FLAG_DRAW_BACKGROUND);
+
+    UISignal signal = ui_signal(checkbox);
+    if (signal.clicked) {
+        *value = !*value;
+    }
+
+    return checkbox;
+}
+
 static UIMouse mouse = {0};
 static void reset_mouse(void) {
     mouse.pos_delta = sp_v2s(0.0f);
     mouse.scroll = 0.0f;
+    for (UIMouseButton btn = 0; btn < UI_MOUSE_BUTTON_COUNT; btn++) {
+        mouse.buttons[btn].clicked = false;
+    }
 }
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     switch (button) {
         case GLFW_MOUSE_BUTTON_1:
-            mouse.buttons[UI_MOUSE_BUTTON_LEFT] = action;
+            mouse.buttons[UI_MOUSE_BUTTON_LEFT].pressed = action;
+            mouse.buttons[UI_MOUSE_BUTTON_LEFT].clicked = action;
             break;
         case GLFW_MOUSE_BUTTON_2:
-            mouse.buttons[UI_MOUSE_BUTTON_RIGHT] = action;
+            mouse.buttons[UI_MOUSE_BUTTON_RIGHT].pressed = action;
+            mouse.buttons[UI_MOUSE_BUTTON_RIGHT].clicked = action;
             break;
         case GLFW_MOUSE_BUTTON_3:
-            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE] = action;
+            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE].pressed = action;
+            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE].clicked = action;
             break;
     }
 }
@@ -77,7 +104,7 @@ static void cursor_pos_callback(GLFWwindow* window, double xpos, double ypos) {
 }
 
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    mouse.scroll = yoffset;
+    mouse.scroll += yoffset;
 }
 
 i32 main(void) {
@@ -156,20 +183,20 @@ i32 main(void) {
         SP_Ivec2 screen_size;
         glfwGetFramebufferSize(window, &screen_size.x, &screen_size.y);
 
+        reset_mouse();
+        glfwPollEvents();
+
         // Build UI
         ui_begin(screen_size, mouse);
 
         // Top bar
         ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
-        ui_next_width(UI_SIZE_PIXELS(screen_size.x, 1.0f));
+        ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
         ui_next_height(UI_SIZE_CHILDREN(1.0f));
         ui_next_flow(UI_AXIS_HORIZONTAL);
         UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
         ui_push_parent(container);
         {
-            ui_push_width(UI_SIZE_TEXT(1.0f));
-            ui_push_height(UI_SIZE_TEXT(1.0f));
-
             ui_next_width(UI_SIZE_PIXELS(ui_top_font_size() * 4.0f, 1.0f));
             ui_next_height(UI_SIZE_PIXELS(ui_top_font_size() * 2.0f, 1.0f));
             ui_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
@@ -182,11 +209,20 @@ i32 main(void) {
                 button->bg = sp_v4(0.2f, 0.2f, 0.5f, 1.0);
             }
 
+
+            static b8 value = false;
+            checkbox(sp_str_pushf(arena, "checkbock%p", &value), &value);
+
             spacer(UI_SIZE_PARENT(1.0f, 0.0f));
+
+            ui_push_width(UI_SIZE_TEXT(1.0f));
+            ui_push_height(UI_SIZE_TEXT(1.0f));
 
             ui_next_height(UI_SIZE_PARENT(1.0, 1.0));
             ui_widget(sp_str_lit("Mouse:"), UI_WIDGET_FLAG_DRAW_TEXT);
             spacer(UI_SIZE_PIXELS(8.0f, 1.0));
+            ui_next_width(UI_SIZE_CHILDREN(1.0));
+            ui_next_height(UI_SIZE_CHILDREN(1.0));
             column() {
                 ui_widget(sp_str_pushf(ui_get_arena(), "Pos: (%.4f, %.4f)", mouse.pos.x, mouse.pos.y), UI_WIDGET_FLAG_DRAW_TEXT);
                 ui_widget(sp_str_pushf(ui_get_arena(), "Delta: (%.4f, %.4f)", mouse.pos_delta.x, mouse.pos_delta.y), UI_WIDGET_FLAG_DRAW_TEXT);
@@ -195,6 +231,8 @@ i32 main(void) {
 
             spacer(UI_SIZE_PARENT(1.0f, 0.0f));
 
+            ui_next_width(UI_SIZE_CHILDREN(1.0));
+            ui_next_height(UI_SIZE_CHILDREN(1.0));
             column() {
                 ui_widget(sp_str_pushf(ui_get_arena(), "FPS: %u", last_fps), UI_WIDGET_FLAG_DRAW_TEXT);
                 ui_widget(sp_str_pushf(ui_get_arena(), "Delta Time: %.4f", dt), UI_WIDGET_FLAG_DRAW_TEXT);
@@ -212,19 +250,32 @@ i32 main(void) {
         ui_next_height(UI_SIZE_PIXELS(128.0f, 1.0f));
         ui_next_fixed_x(window_pos.x);
         ui_next_fixed_y(window_pos.y);
-        UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##container"),
+        UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##window"),
                 UI_WIDGET_FLAG_DRAW_BACKGROUND |
                 UI_WIDGET_FLAG_FLOATING |
                 UI_WIDGET_FLAG_DRAW_TEXT);
         ui_push_parent(draggable);
         {
+            ui_next_bg(sp_v4(0.0f, 0.0f, 0.0f, 0.5f));
             ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
             ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
-            UIWidget* drag_bar = ui_widget(sp_str_lit("##dragbar"), UI_WIDGET_FLAG_NONE);
+            // ui_next_height(UI_SIZE_CHILDREN(1.0f));
+            ui_next_flow(UI_AXIS_HORIZONTAL);
+            UIWidget* drag_bar = ui_widget(sp_str_lit("##dragbar"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
             UISignal signal = ui_signal(drag_bar);
-            if (signal.pressed) {
+            if (signal.focused) {
                 window_pos = sp_v2_add(window_pos, signal.drag);
             }
+            ui_push_parent(drag_bar);
+            {
+                ui_next_height(UI_SIZE_PARENT(1.0f, 1.0));
+                spacer(UI_SIZE_PARENT(1.0f, 0.0f));
+
+                ui_next_width(UI_SIZE_TEXT(1.0f));
+                ui_next_height(UI_SIZE_PARENT(1.0f, 1.0f));
+                UIWidget* close_button = ui_widget(sp_str_lit("X##close_button"), UI_WIDGET_FLAG_DRAW_TEXT);
+            }
+            ui_pop_parent();
         }
         ui_pop_parent();
 
@@ -282,11 +333,9 @@ i32 main(void) {
         renderer_end(&renderer);
 
         glfwSwapBuffers(window);
-        reset_mouse();
-        glfwPollEvents();
     }
 
-    sp_dump_arena_metrics();
+    // sp_dump_arena_metrics();
 
     // Shutdown
     font_destroy(font);

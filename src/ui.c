@@ -3,6 +3,7 @@
 #include "renderer.h"
 #include "spire.h"
 
+#include <math.h>
 #include <stdio.h>
 
 // Style stacks
@@ -148,18 +149,12 @@ static void build_fixed_sizes(UIWidget* widget) {
         }
     }
 
+    // Bredth-first
     build_fixed_sizes(widget->next);
     build_fixed_sizes(widget->child_first);
 }
 
-static void build_child_sizes(UIWidget* widget) {
-    if (widget == NULL) {
-        return;
-    }
-
-    build_child_sizes(widget->child_first);
-    build_child_sizes(widget->next);
-
+static SP_Vec2 sum_child_size(UIWidget* widget) {
     SP_Vec2 child_sum = sp_v2s(0.0f);
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
         if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
@@ -172,10 +167,71 @@ static void build_child_sizes(UIWidget* widget) {
             break;
         }
     }
+    return child_sum;
+}
 
+static void build_child_sizes(UIWidget* widget) {
+    if (widget == NULL) {
+        return;
+    }
+
+    // Depth-first
+    build_child_sizes(widget->child_first);
+    build_child_sizes(widget->next);
+
+    SP_Vec2 child_sum = sum_child_size(widget);
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
         if (widget->size[i].kind == UI_SIZE_KIND_CHILDREN) {
             widget->computed_size.elements[i] = child_sum.elements[i];
+        }
+    }
+}
+
+static void build_parent_sizes(UIWidget* widget) {
+    if (widget == NULL) {
+        return;
+    }
+
+    for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
+        if (widget->size[i].kind == UI_SIZE_KIND_PARENT && widget->parent != NULL) {
+            widget->computed_size.elements[i] = widget->parent->computed_size.elements[i] * widget->size[i].value;
+        }
+    }
+
+    // Bredth-first
+    build_parent_sizes(widget->next);
+    build_parent_sizes(widget->child_first);
+}
+
+static void solve_size_violations(UIWidget* widget) {
+    if (widget == NULL) {
+        return;
+    }
+
+    // Depth-first
+    solve_size_violations(widget->next);
+    solve_size_violations(widget->child_first);
+
+    SP_Vec2 child_sum = sum_child_size(widget);
+    for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
+        f32 violation_amount = child_sum.elements[i] - widget->computed_size.elements[i];
+
+        // Violation
+        if (violation_amount > 0.0f) {
+            f32 total_budget = 0.0f;
+            for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
+                total_budget += curr_child->computed_size.elements[i] * (1.0f - curr_child->size[i].strictness);
+            }
+
+            if (total_budget < violation_amount) {
+                sp_warn("UI sizing violations exceeds budget.");
+            }
+
+            for (UIWidget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
+                f32 child_budget = curr_child->computed_size.elements[i] * (1.0f - curr_child->size[i].strictness);
+                curr_child->computed_size.elements[i] -= child_budget * (violation_amount / total_budget);
+                curr_child->computed_size.elements[i] = floorf(curr_child->computed_size.elements[i]);
+            }
         }
     }
 }
@@ -207,9 +263,10 @@ static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
 void ui_end(void) {
     ctx.current_frame++;
 
-    // TODO: Calculate layout
     build_fixed_sizes(&ctx.container);
     build_child_sizes(&ctx.container);
+    build_parent_sizes(&ctx.container);
+    solve_size_violations(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));
 }
 

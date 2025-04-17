@@ -23,7 +23,7 @@ typedef enum UISizeKind {
     UI_SIZE_KIND_PIXELS,
     UI_SIZE_KIND_TEXT,
     UI_SIZE_KIND_CHILDREN,
-    UI_SIZE_KIND_PERCENT,
+    UI_SIZE_KIND_PARENT,
     UI_SIZE_KIND_COUNT,
 } UISizeKind;
 
@@ -98,9 +98,9 @@ extern UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags);
         .kind = UI_SIZE_KIND_CHILDREN, \
         .strictness = STRICTNESS \
     })
-#define UI_SIZE_PERCENT(VALUE, STRICTNESS) \
+#define UI_SIZE_PARENT(VALUE, STRICTNESS) \
     ((UISize) { \
-        .kind = UI_SIZE_KIND_PERCENT, \
+        .kind = UI_SIZE_KIND_PARENT, \
         .value = VALUE, \
         .strictness = STRICTNESS \
     })

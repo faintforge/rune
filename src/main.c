@@ -74,8 +74,9 @@ i32 main(void) {
     // Create renderer
     Renderer renderer = renderer_create(arena);
     // Font* font = font_create(arena, sp_str_lit("assets/Roboto/Roboto-Regular.ttf"));
-    Font* font = font_create(arena, sp_str_lit("assets/Spline_Sans/static/SplineSans-Regular.ttf"));
+    // Font* font = font_create(arena, sp_str_lit("assets/Spline_Sans/static/SplineSans-Regular.ttf"));
     // Font* font = font_create(arena, sp_str_lit("assets/Tiny5/Tiny5-Regular.ttf"));
+    Font* font = font_create(arena, sp_str_lit("assets/Roboto_Mono/static/RobotoMono-Regular.ttf"));
 
     ui_init((UIStyleStack) {
             .size = {
@@ -97,8 +98,25 @@ i32 main(void) {
             .flow = UI_AXIS_VERTICAL,
         });
 
+    u32 fps = 0;
+    u32 last_fps = 0;
+    f32 fps_timer = 0.0f;
+    f32 last = sp_os_get_time();
+
     // Main loop
     while (!glfwWindowShouldClose(window)) {
+        f32 curr = sp_os_get_time();
+        f32 dt = curr - last;
+        last = curr;
+
+        fps++;
+        fps_timer += dt;
+        if (fps_timer >= 1.0f) {
+            last_fps = fps;
+            fps = 0;
+            fps_timer = 0.0f;
+        }
+
         SP_Ivec2 screen_size;
         glfwGetFramebufferSize(window, &screen_size.x, &screen_size.y);
 
@@ -106,44 +124,71 @@ i32 main(void) {
         ui_begin(screen_size);
 
         ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
-        ui_next_width(UI_SIZE_CHILDREN(1.0f));
+        ui_next_width(UI_SIZE_PIXELS(screen_size.x, 1.0f));
         ui_next_height(UI_SIZE_CHILDREN(1.0f));
+        ui_next_flow(UI_AXIS_HORIZONTAL);
         UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
         ui_push_parent(container);
         {
+            ui_push_width(UI_SIZE_TEXT(1.0f));
+            ui_push_height(UI_SIZE_TEXT(1.0f));
+
+            spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
             column() {
-                spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-                row() {
-                    spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-
-                    ui_push_width(UI_SIZE_TEXT(1.0f));
-                    ui_push_height(UI_SIZE_TEXT(1.0f));
-
-                    column() {
-                        ui_widget(sp_str_lit("Abc"), UI_WIDGET_FLAG_DRAW_TEXT);
-                        ui_widget(sp_str_lit("Wow"), UI_WIDGET_FLAG_DRAW_TEXT);
-                        spacer(UI_SIZE_TEXT(1.0f));
-                        ui_widget(sp_str_lit("I skipped the last row!"), UI_WIDGET_FLAG_DRAW_TEXT);
-                    }
-
-                    spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-
-                    column() {
-                        ui_widget(sp_str_lit("Another column!"), UI_WIDGET_FLAG_DRAW_TEXT);
-                        ui_widget(sp_str_lit("This is amazing."), UI_WIDGET_FLAG_DRAW_TEXT);
-                        ui_widget(sp_str_lit("I love this so much :3"), UI_WIDGET_FLAG_DRAW_TEXT);
-                        ui_widget(sp_str_lit("I'm so proud of myself :D"), UI_WIDGET_FLAG_DRAW_TEXT);
-                    }
-
-                    ui_pop_width();
-                    ui_pop_height();
-
-                    spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-                }
-                spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+                ui_widget(sp_str_pushf(ui_get_arena(), "FPS: %u", last_fps), UI_WIDGET_FLAG_DRAW_TEXT);
+                ui_widget(sp_str_pushf(ui_get_arena(), "Delta Time: %.4f", dt), UI_WIDGET_FLAG_DRAW_TEXT);
             }
+
+            spacer(UI_SIZE_PARENT(1.0, 0.0f));
+            ui_widget(sp_str_lit("More things"), UI_WIDGET_FLAG_DRAW_TEXT);
+
+            spacer(UI_SIZE_PARENT(1.0, 0.0f));
+            ui_widget(sp_str_lit("Right"), UI_WIDGET_FLAG_DRAW_TEXT);
+            spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+
+            ui_pop_width();
+            ui_pop_height();
         }
         ui_pop_parent();
+
+        // ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
+        // ui_next_width(UI_SIZE_CHILDREN(1.0f));
+        // ui_next_height(UI_SIZE_CHILDREN(1.0f));
+        // UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
+        // ui_push_parent(container);
+        // {
+        //     column() {
+        //         spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+        //         row() {
+        //             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+        //
+        //             ui_push_width(UI_SIZE_TEXT(1.0f));
+        //             ui_push_height(UI_SIZE_TEXT(1.0f));
+        //
+        //             column() {
+        //                 ui_widget(sp_str_pushf(ui_get_arena(), "FPS: %u", last_fps), UI_WIDGET_FLAG_DRAW_TEXT);
+        //                 ui_widget(sp_str_lit("Abc"), UI_WIDGET_FLAG_DRAW_TEXT);
+        //                 ui_widget(sp_str_lit("Wow"), UI_WIDGET_FLAG_DRAW_TEXT);
+        //             }
+        //
+        //             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+        //
+        //             column() {
+        //                 ui_widget(sp_str_lit("Another column!"), UI_WIDGET_FLAG_DRAW_TEXT);
+        //                 ui_widget(sp_str_lit("This is amazing."), UI_WIDGET_FLAG_DRAW_TEXT);
+        //                 ui_widget(sp_str_lit("I love this so much :3"), UI_WIDGET_FLAG_DRAW_TEXT);
+        //                 ui_widget(sp_str_lit("I'm so proud of myself :D"), UI_WIDGET_FLAG_DRAW_TEXT);
+        //             }
+        //
+        //             ui_pop_width();
+        //             ui_pop_height();
+        //
+        //             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+        //         }
+        //         spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
+        //     }
+        // }
+        // ui_pop_parent();
 
         ui_end();
 

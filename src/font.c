@@ -577,11 +577,7 @@ SP_Vec2 font_measure_string(Font* font, SP_Str str) {
 
     for (u32 i = 0; i < str.len; i++) {
         Glyph glyph = font_get_glyph(font, str.data[i]);
-        if (i < str.len - 1) {
-            size.x += glyph.advance;
-        } else {
-            size.x += glyph.size.x;
-        }
+        size.x += glyph.advance;
         if (i < str.len - 1) {
             size.x += font_get_kerning(font, str.data[i], str.data[i+1]);
         }

@@ -56,11 +56,11 @@ static UIWidget* checkbox(SP_Str id, b8* value) {
     ui_next_width(UI_SIZE_PIXELS(32.0f, 1.0f));
     ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
     if (*value) {
-        ui_next_bg(sp_v4(0.2f, 0.2f, 0.2f, 1.0f));
-    } else {
         ui_next_bg(sp_v4(0.75f, 0.75f, 0.75f, 1.0f));
+    } else {
+        ui_next_bg(sp_v4(0.2f, 0.2f, 0.2f, 1.0f));
     }
-    UIWidget* checkbox = ui_widget(id, UI_WIDGET_FLAG_DRAW_BACKGROUND);
+    UIWidget* checkbox = ui_widget(id, UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_INTERACTIVE);
 
     UISignal signal = ui_signal(checkbox);
     if (signal.clicked) {

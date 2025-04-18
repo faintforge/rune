@@ -10,7 +10,9 @@ typedef enum UIWidgetFlags {
     UI_WIDGET_FLAG_FLOATING_X      = 1 << 2,
     UI_WIDGET_FLAG_FLOATING_Y      = 1 << 3,
     UI_WIDGET_FLAG_FLOATING        = UI_WIDGET_FLAG_FLOATING_X |
-                                     UI_WIDGET_FLAG_FLOATING_Y
+                                     UI_WIDGET_FLAG_FLOATING_Y,
+    // Widget will consume interaction events and can generate signals.
+    UI_WIDGET_FLAG_INTERACTIVE     = 1 << 4,
 } UIWidgetFlags;
 
 typedef enum UIAxis {
@@ -45,6 +47,8 @@ struct UIWidget {
     // Children
     UIWidget* child_first;
     UIWidget* child_last;
+
+    UIWidget* stack_next;
 
     UIWidgetFlags flags;
     UISize size[UI_AXIS_COUNT];

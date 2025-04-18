@@ -5,6 +5,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 // Style stacks
 // #define X(name_upper, name_lower, type)
@@ -39,9 +40,11 @@ struct UIContext {
     u64 current_frame;
 
     SP_HashMap* widget_map;
-    UIMouse mouse;
+    UIWidget* widget_no_id_stack;
+    UIWidget* widget_free_stack;
 
     UIWidget* focused_widget;
+    UIMouse mouse;
 
     // Styles
     UIStyleStack default_style_stack;
@@ -101,6 +104,7 @@ void ui_init(UIStyleStack default_style_stack) {
 
 void ui_begin(SP_Ivec2 container_size, UIMouse mouse) {
     SP_Arena* arena = ui_get_arena();
+    sp_arena_clear(arena);
 
     ctx.container = (UIWidget) {
         .id = sp_str_lit("(root_container)"),
@@ -285,14 +289,39 @@ static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
 void ui_end(void) {
     ctx.current_frame++;
 
-    SP_Arena* arena = ui_get_arena();
-    sp_arena_clear(arena);
-
     build_fixed_sizes(&ctx.container);
     build_child_sizes(&ctx.container);
     build_parent_sizes(&ctx.container);
     solve_size_violations(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));
+
+    UIWidget* remove_stack = NULL;
+    for (SP_HashMapIter i = sp_hm_iter_new(ctx.widget_map);
+            sp_hm_iter_valid(i);
+            i = sp_hm_iter_next(i)) {
+        UIWidget* widget = sp_hm_iter_get_value(i, UIWidget*);
+        sp_assert(widget->id.len != 0, "No ID widgets shouldn't be in the map.");
+        if (widget->last_touched + 2 <= ctx.current_frame) {
+            sp_sll_stack_push_nz(remove_stack, widget, stack_next, sp_null_check);
+        }
+    }
+
+    while (remove_stack != NULL) {
+        UIWidget* widget = remove_stack;
+        UIWidget* removed = sp_hm_remove(ctx.widget_map, widget->id, UIWidget*);
+        sp_assert(removed == widget, "Widget (%.*s) removed from map doesn't match dead widget. %p, %p", widget->id.len, widget->id.data, widget, removed);
+        sp_sll_stack_pop_nz(remove_stack, stack_next, sp_null_check);
+        sp_sll_stack_push_nz(ctx.widget_free_stack, widget, stack_next, sp_null_check);
+    }
+
+    while (ctx.widget_no_id_stack != NULL) {
+        UIWidget* widget = ctx.widget_no_id_stack;
+        if (widget->id.len != 0) {
+            sp_debug("Uhhhhh");
+        }
+        sp_sll_stack_pop_nz(ctx.widget_no_id_stack, stack_next, sp_null_check);
+        sp_sll_stack_push_nz(ctx.widget_free_stack, widget, stack_next, sp_null_check);
+    }
 }
 
 static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
@@ -365,21 +394,39 @@ static void parse_text(SP_Str text, SP_Str* id, SP_Str* display_text) {
     }
 }
 
+static UIWidget* new_widget(void) {
+    UIWidget* widget;
+    if (ctx.widget_free_stack != NULL) {
+        widget = ctx.widget_free_stack;
+        sp_sll_stack_pop_nz(ctx.widget_free_stack, stack_next, sp_null_check);
+        widget->stack_next = NULL;
+    } else {
+        widget = sp_arena_push(ctx.arena, sizeof(UIWidget));
+    }
+    return widget;
+}
+
 static UIWidget* widget_from_id(SP_Str* id) {
     UIWidget* widget = sp_hm_get(ctx.widget_map, *id, UIWidget*);
 
-    // TODO: Add free list for no-id widgets and widgets that haven't been
-    // touched for two generations.
-
     // New ID
     if (widget == NULL) {
-        widget = sp_arena_push_no_zero(ctx.arena, sizeof(UIWidget));
-        sp_hm_insert(ctx.widget_map, *id, widget);
+        widget = new_widget();
+        if (id->len == 0) {
+            *id = sp_str_lit("");
+            sp_sll_stack_push_nz(ctx.widget_no_id_stack, widget, stack_next, sp_null_check);
+        } else {
+            // ID must be alive as long as the widget is.
+            u8* id_data = sp_arena_push_no_zero(ctx.arena, id->len);
+            memcpy(id_data, id->data, id->len);
+            *id = sp_str(id_data, id->len);
+            sp_hm_insert(ctx.widget_map, *id, widget);
+        }
     }
     // Duplicate ID
     else if (widget->last_touched == ctx.current_frame) {
         *id = sp_str_lit("");
-        widget = sp_arena_push_no_zero(ctx.arena, sizeof(UIWidget));
+        sp_sll_stack_push_nz(ctx.widget_no_id_stack, widget, stack_next, sp_null_check);
     }
 
     return widget;
@@ -400,6 +447,7 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
         .id = id,
         .text = display_text,
         .last_touched = ctx.current_frame,
+        .stack_next = widget->stack_next,
 
         .size = {
             ui_top_width(),

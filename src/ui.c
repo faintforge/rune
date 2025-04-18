@@ -19,7 +19,8 @@
     X(Flow, flow, UIAxis) \
     X(Parent, parent, UIWidget*) \
     X(FixedX, fixed_x, f32) \
-    X(FixedY, fixed_y, f32)
+    X(FixedY, fixed_y, f32) \
+    X(TextAlign, text_align, UITextAlign)
 
 #define X(name_upper, name_lower, type) \
     typedef struct UI##name_upper##Node UI##name_upper##Node; \
@@ -137,6 +138,7 @@ void ui_begin(SP_Ivec2 container_size, UIMouse mouse) {
     ui_push_parent(&ctx.container);
     ui_push_fixed_x(0.0f);
     ui_push_fixed_y(0.0f);
+    ui_push_text_align(ctx.default_style_stack.text_align);
 }
 
 static void build_fixed_sizes(UIWidget* widget) {
@@ -341,8 +343,23 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
         font_set_size(widget->font, widget->font_size);
         FontMetrics metrics = font_get_metrics(widget->font);
 
-        // Center text vertically
         SP_Vec2 pos = widget->computed_absolute_position;
+        switch (widget->text_align) {
+            case UI_TEXT_ALIGN_LEFT:
+                break;
+            case UI_TEXT_ALIGN_CENTER: {
+                SP_Vec2 text_size = font_measure_string(widget->font, widget->text);
+                pos.x += widget->computed_size.x / 2.0f;
+                pos.x -= text_size.x / 2.0f;
+            } break;
+            case UI_TEXT_ALIGN_RIGHT: {
+                SP_Vec2 text_size = font_measure_string(widget->font, widget->text);
+                pos.x += widget->computed_size.x;
+                pos.x -= text_size.x;
+            } break;
+        }
+
+        // Center text vertically
         pos.y += widget->computed_size.y / 2.0f;
         pos.y -= (metrics.ascent - metrics.descent) / 2.0f;
 
@@ -463,6 +480,7 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
         .font = ui_top_font(),
         .font_size = ui_top_font_size(),
         .flow = ui_top_flow(),
+        .text_align = ui_top_text_align(),
     };
 
     if (flags & UI_WIDGET_FLAG_FLOATING_X) {
@@ -550,6 +568,7 @@ LIST_STYLE_STACKS
 // Top impls
 #define X(name_upper, name_lower, type) \
     type ui_top_##name_lower(void) { \
+        sp_assert(ctx.name_lower##_stack != NULL, "All " #name_lower " have been popped off of the style stack."); \
         type value = ctx.name_lower##_stack->value; \
         if (ctx.name_lower##_stack->pop_next) { \
             sp_sll_stack_pop(ctx.name_lower##_stack); \

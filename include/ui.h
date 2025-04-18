@@ -36,6 +36,12 @@ struct UISize {
     f32 strictness;
 };
 
+typedef enum UITextAlign {
+    UI_TEXT_ALIGN_LEFT,
+    UI_TEXT_ALIGN_CENTER,
+    UI_TEXT_ALIGN_RIGHT,
+} UITextAlign;
+
 typedef struct UIWidget UIWidget;
 struct UIWidget {
     UIWidget* parent;
@@ -67,6 +73,7 @@ struct UIWidget {
     Font* font;
     u32 font_size;
     UIAxis flow;
+    UITextAlign text_align;
 };
 
 typedef struct UIStyleStack UIStyleStack;
@@ -77,6 +84,7 @@ struct UIStyleStack {
     Font* font;
     u32 font_size;
     UIAxis flow;
+    UITextAlign text_align;
 };
 
 typedef enum UIMouseButton {
@@ -150,6 +158,7 @@ extern void ui_push_flow(UIAxis value);
 extern void ui_push_parent(UIWidget* value);
 extern void ui_push_fixed_x(f32 value);
 extern void ui_push_fixed_y(f32 value);
+extern void ui_push_text_align(UITextAlign value);
 
 extern UISize ui_pop_width(void);
 extern UISize ui_pop_height(void);
@@ -161,6 +170,7 @@ extern UIAxis ui_pop_flow(void);
 extern UIWidget* ui_pop_parent(void);
 extern f32 ui_pop_fixed_x(void);
 extern f32 ui_pop_fixed_y(void);
+extern UITextAlign ui_pop_text_align(void);
 
 extern void ui_next_width(UISize value);
 extern void ui_next_height(UISize value);
@@ -172,6 +182,7 @@ extern void ui_next_flow(UIAxis value);
 extern void ui_next_parent(UIWidget* value);
 extern void ui_next_fixed_x(f32 value);
 extern void ui_next_fixed_y(f32 value);
+extern void ui_next_text_align(UITextAlign value);
 
 extern UISize ui_top_width(void);
 extern UISize ui_top_height(void);
@@ -183,3 +194,4 @@ extern UIAxis ui_top_flow(void);
 extern UIWidget* ui_top_parent(void);
 extern f32 ui_top_fixed_x(void);
 extern f32 ui_top_fixed_y(void);
+extern UITextAlign ui_top_text_align(void);

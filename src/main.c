@@ -123,6 +123,7 @@ i32 main(void) {
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_pos_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    // glfwSwapInterval(0);
 
     // Load GL functions
     gladLoadGL(glfwGetProcAddress);
@@ -157,6 +158,7 @@ i32 main(void) {
             .font = font,
             .font_size = 24,
             .flow = UI_AXIS_VERTICAL,
+            .text_align = UI_TEXT_ALIGN_LEFT,
         });
 
     u32 fps = 0;
@@ -165,6 +167,7 @@ i32 main(void) {
     f32 last = sp_os_get_time();
 
     SP_Vec2 window_pos = sp_v2s(128.0f);
+    b8 show_window = true;
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -197,10 +200,11 @@ i32 main(void) {
         UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
         ui_push_parent(container);
         {
-            ui_next_width(UI_SIZE_PIXELS(ui_top_font_size() * 4.0f, 1.0f));
+            ui_next_width(UI_SIZE_PIXELS(ui_top_font_size() * 6.0f, 1.0f));
             ui_next_height(UI_SIZE_PIXELS(ui_top_font_size() * 2.0f, 1.0f));
             ui_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
-            UIWidget* button = ui_widget(sp_str_lit("Button"), UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_DRAW_TEXT);
+            ui_next_text_align(UI_TEXT_ALIGN_CENTER);
+            UIWidget* button = ui_widget(sp_str_lit("Show Window"), UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_DRAW_TEXT);
             UISignal signal = ui_signal(button);
             if (signal.hovered) {
                 button->bg = sp_v4(0.5f, 0.2f, 0.2f, 1.0);
@@ -208,10 +212,11 @@ i32 main(void) {
             if (signal.pressed) {
                 button->bg = sp_v4(0.2f, 0.2f, 0.5f, 1.0);
             }
+            if (signal.clicked) {
+                show_window = true;
+            }
 
-
-            static b8 value = false;
-            checkbox(sp_str_pushf(arena, "checkbock%p", &value), &value);
+            checkbox(sp_str_pushf(arena, "checkbock%p", &show_window), &show_window);
 
             spacer(UI_SIZE_PARENT(1.0f, 0.0f));
 
@@ -245,40 +250,47 @@ i32 main(void) {
         ui_pop_parent();
 
         // Draggable window
-        ui_next_bg(sp_v4(0.2f, 0.2f, 0.3f, 1.0f));
-        ui_next_width(UI_SIZE_PIXELS(128.0f, 1.0f));
-        ui_next_height(UI_SIZE_PIXELS(128.0f, 1.0f));
-        ui_next_fixed_x(window_pos.x);
-        ui_next_fixed_y(window_pos.y);
-        UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##window"),
-                UI_WIDGET_FLAG_DRAW_BACKGROUND |
-                UI_WIDGET_FLAG_FLOATING |
-                UI_WIDGET_FLAG_DRAW_TEXT);
-        ui_push_parent(draggable);
-        {
-            ui_next_bg(sp_v4(0.0f, 0.0f, 0.0f, 0.5f));
-            ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
-            ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
-            // ui_next_height(UI_SIZE_CHILDREN(1.0f));
-            ui_next_flow(UI_AXIS_HORIZONTAL);
-            UIWidget* drag_bar = ui_widget(sp_str_lit("##dragbar"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
-            UISignal signal = ui_signal(drag_bar);
-            if (signal.focused) {
-                window_pos = sp_v2_add(window_pos, signal.drag);
-            }
-            ui_push_parent(drag_bar);
+        if (show_window) {
+            ui_next_bg(sp_v4(0.2f, 0.2f, 0.3f, 1.0f));
+            ui_next_width(UI_SIZE_PIXELS(128.0f, 1.0f));
+            ui_next_height(UI_SIZE_PIXELS(128.0f, 1.0f));
+            ui_next_fixed_x(window_pos.x);
+            ui_next_fixed_y(window_pos.y);
+            ui_next_text_align(UI_TEXT_ALIGN_CENTER);
+            UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##window"),
+                    UI_WIDGET_FLAG_DRAW_BACKGROUND |
+                    UI_WIDGET_FLAG_FLOATING |
+                    UI_WIDGET_FLAG_DRAW_TEXT);
+            ui_push_parent(draggable);
             {
-                ui_next_height(UI_SIZE_PARENT(1.0f, 1.0));
-                spacer(UI_SIZE_PARENT(1.0f, 0.0f));
+                ui_next_bg(sp_v4(0.0f, 0.0f, 0.0f, 0.5f));
+                ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
+                ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
+                // ui_next_height(UI_SIZE_CHILDREN(1.0f));
+                ui_next_flow(UI_AXIS_HORIZONTAL);
+                UIWidget* drag_bar = ui_widget(sp_str_lit("##dragbar"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
+                UISignal signal = ui_signal(drag_bar);
+                if (signal.focused) {
+                    window_pos = sp_v2_add(window_pos, signal.drag);
+                }
+                ui_push_parent(drag_bar);
+                {
+                    ui_next_height(UI_SIZE_PARENT(1.0f, 1.0));
+                    spacer(UI_SIZE_PARENT(1.0f, 0.0f));
 
-                ui_next_width(UI_SIZE_TEXT(1.0f));
-                ui_next_height(UI_SIZE_PARENT(1.0f, 1.0f));
-                UIWidget* close_button = ui_widget(sp_str_lit("X##close_button"), UI_WIDGET_FLAG_DRAW_TEXT);
+                    ui_next_width(UI_SIZE_TEXT(1.0f));
+                    ui_next_height(UI_SIZE_PARENT(1.0f, 1.0f));
+                    UIWidget* close_button = ui_widget(sp_str_lit("X##close_button"), UI_WIDGET_FLAG_DRAW_TEXT);
+                    if (ui_signal(close_button).clicked) {
+                        show_window = false;
+                    }
+
+                    spacer(UI_SIZE_PIXELS(8.0f, 1.0));
+                }
+                ui_pop_parent();
             }
             ui_pop_parent();
         }
-        ui_pop_parent();
-
 
         // ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
         // ui_next_width(UI_SIZE_CHILDREN(1.0f));

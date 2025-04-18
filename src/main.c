@@ -51,16 +51,34 @@ static UIWidget* spacer(UISize size) {
     return ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
 }
 
+static void checkbox_render(UIWidget* widget, Renderer* renderer, void* userdata) {
+    b8 value = *(b8*) userdata;
+    if (!value) {
+        return;
+    }
+
+    const f32 fill_amount = 0.6f;
+
+    SP_Vec2 size = widget->computed_size;
+    size = sp_v2_muls(size, fill_amount);
+
+    SP_Vec2 pos = widget->computed_absolute_position;
+    pos = sp_v2_add(pos, sp_v2_divs(sp_v2_sub(widget->computed_size, size), 2.0f));
+
+
+    renderer_draw(renderer, (RenderBox) {
+            .pos = pos,
+            .size = size,
+            .color = sp_v4(0.75f, 0.75f, 0.75f, 1.0f),
+        });
+}
+
 static UIWidget* checkbox(SP_Str id, b8* value) {
-    // TODO: Add custom rendering functionality to widgets.
     ui_next_width(UI_SIZE_PIXELS(32.0f, 1.0f));
     ui_next_height(UI_SIZE_PIXELS(32.0f, 1.0f));
-    if (*value) {
-        ui_next_bg(sp_v4(0.75f, 0.75f, 0.75f, 1.0f));
-    } else {
-        ui_next_bg(sp_v4(0.2f, 0.2f, 0.2f, 1.0f));
-    }
+    ui_next_bg(sp_v4(0.2f, 0.2f, 0.2f, 1.0f));
     UIWidget* checkbox = ui_widget(id, UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_INTERACTIVE);
+    ui_widget_equip_render_func(checkbox, checkbox_render, value);
 
     UISignal signal = ui_signal(checkbox);
     if (signal.clicked) {
@@ -291,45 +309,6 @@ i32 main(void) {
             }
             ui_pop_parent();
         }
-
-        // ui_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
-        // ui_next_width(UI_SIZE_CHILDREN(1.0f));
-        // ui_next_height(UI_SIZE_CHILDREN(1.0f));
-        // UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
-        // ui_push_parent(container);
-        // {
-        //     column() {
-        //         spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-        //         row() {
-        //             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-        //
-        //             ui_push_width(UI_SIZE_TEXT(1.0f));
-        //             ui_push_height(UI_SIZE_TEXT(1.0f));
-        //
-        //             column() {
-        //                 ui_widget(sp_str_pushf(ui_get_arena(), "FPS: %u", last_fps), UI_WIDGET_FLAG_DRAW_TEXT);
-        //                 ui_widget(sp_str_lit("Abc"), UI_WIDGET_FLAG_DRAW_TEXT);
-        //                 ui_widget(sp_str_lit("Wow"), UI_WIDGET_FLAG_DRAW_TEXT);
-        //             }
-        //
-        //             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-        //
-        //             column() {
-        //                 ui_widget(sp_str_lit("Another column!"), UI_WIDGET_FLAG_DRAW_TEXT);
-        //                 ui_widget(sp_str_lit("This is amazing."), UI_WIDGET_FLAG_DRAW_TEXT);
-        //                 ui_widget(sp_str_lit("I love this so much :3"), UI_WIDGET_FLAG_DRAW_TEXT);
-        //                 ui_widget(sp_str_lit("I'm so proud of myself :D"), UI_WIDGET_FLAG_DRAW_TEXT);
-        //             }
-        //
-        //             ui_pop_width();
-        //             ui_pop_height();
-        //
-        //             spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-        //         }
-        //         spacer(UI_SIZE_PIXELS(16.0f, 1.0f));
-        //     }
-        // }
-        // ui_pop_parent();
 
         ui_end();
 

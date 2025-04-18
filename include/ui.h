@@ -43,6 +43,9 @@ typedef enum UITextAlign {
 } UITextAlign;
 
 typedef struct UIWidget UIWidget;
+
+typedef void (*UIWidgetRenderFunc)(UIWidget* widget, Renderer* renderer, void* userdata);
+
 struct UIWidget {
     UIWidget* parent;
 
@@ -66,6 +69,9 @@ struct UIWidget {
     SP_Str id;
     SP_Str text;
     u32 last_touched;
+
+    UIWidgetRenderFunc render_func;
+    void* render_userdata;
 
     // Style
     SP_Vec4 bg;
@@ -121,6 +127,7 @@ extern void ui_draw(Renderer* renderer);
 
 extern SP_Arena* ui_get_arena(void);
 extern UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags);
+extern void ui_widget_equip_render_func(UIWidget* widget, UIWidgetRenderFunc func, void* userdata);
 
 extern UISignal ui_signal(UIWidget* widget);
 

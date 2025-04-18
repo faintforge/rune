@@ -370,6 +370,10 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
                 widget->fg);
     }
 
+    if (widget->render_func != NULL) {
+        widget->render_func(widget, renderer, widget->render_userdata);
+    }
+
     // Depth-first
     ui_draw_helper(renderer, widget->child_first);
     ui_draw_helper(renderer, widget->next);
@@ -493,6 +497,11 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
 
     sp_dll_push_back(parent->child_first, parent->child_last, widget);
     return widget;
+}
+
+void ui_widget_equip_render_func(UIWidget* widget, UIWidgetRenderFunc func, void* userdata) {
+    widget->render_func = func;
+    widget->render_userdata = userdata;
 }
 
 UISignal ui_signal(UIWidget* widget) {

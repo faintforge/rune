@@ -6,6 +6,44 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+static UIMouse mouse = {0};
+static void reset_mouse(void) {
+    mouse.pos_delta = sp_v2s(0.0f);
+    mouse.scroll = 0.0f;
+    for (UIMouseButton btn = 0; btn < UI_MOUSE_BUTTON_COUNT; btn++) {
+        mouse.buttons[btn].clicked = false;
+    }
+}
+
+static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    switch (button) {
+        case GLFW_MOUSE_BUTTON_1:
+            mouse.buttons[UI_MOUSE_BUTTON_LEFT].pressed = action;
+            mouse.buttons[UI_MOUSE_BUTTON_LEFT].clicked = action;
+            break;
+        case GLFW_MOUSE_BUTTON_2:
+            mouse.buttons[UI_MOUSE_BUTTON_RIGHT].pressed = action;
+            mouse.buttons[UI_MOUSE_BUTTON_RIGHT].clicked = action;
+            break;
+        case GLFW_MOUSE_BUTTON_3:
+            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE].pressed = action;
+            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE].clicked = action;
+            break;
+    }
+}
+
+static void cursor_pos_callback(GLFWwindow* window, double xpos, double ypos) {
+    SP_Vec2 pos = sp_v2(xpos, ypos);
+    SP_Vec2 delta = sp_v2_sub(pos, mouse.pos);
+    mouse.pos = pos;
+    mouse.pos_delta = sp_v2_add(mouse.pos_delta, delta);
+}
+
+static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    mouse.scroll += yoffset;
+}
+
+
 static void column_start(void) {
     // ui_next_width(UI_SIZE_CHILDREN(1.0f));
     // ui_next_height(UI_SIZE_CHILDREN(1.0f));
@@ -51,6 +89,12 @@ static UIWidget* spacer(UISize size) {
     return ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_NONE);
 }
 
+static UIWidget* text(SP_Str text) {
+    ui_next_width(UI_SIZE_TEXT(1.0));
+    ui_next_height(UI_SIZE_TEXT(1.0));
+    return ui_widget(text, UI_WIDGET_FLAG_DRAW_TEXT);
+}
+
 static void checkbox_render(UIWidget* widget, Renderer* renderer, void* userdata) {
     b8 value = *(b8*) userdata;
     if (!value) {
@@ -64,7 +108,6 @@ static void checkbox_render(UIWidget* widget, Renderer* renderer, void* userdata
 
     SP_Vec2 pos = widget->computed_absolute_position;
     pos = sp_v2_add(pos, sp_v2_divs(sp_v2_sub(widget->computed_size, size), 2.0f));
-
 
     renderer_draw(renderer, (RenderBox) {
             .pos = pos,
@@ -88,41 +131,90 @@ static UIWidget* checkbox(SP_Str id, b8* value) {
     return checkbox;
 }
 
-static UIMouse mouse = {0};
-static void reset_mouse(void) {
-    mouse.pos_delta = sp_v2s(0.0f);
-    mouse.scroll = 0.0f;
-    for (UIMouseButton btn = 0; btn < UI_MOUSE_BUTTON_COUNT; btn++) {
-        mouse.buttons[btn].clicked = false;
+typedef struct Rect Rect;
+struct Rect {
+    SP_Vec2 pos;
+    SP_Vec2 size;
+    SP_Vec4 color;
+};
+
+typedef union SliderData SliderData;
+union SliderData {
+    struct {
+        Rect bar;
+        Rect fill;
+    };
+    Rect r[2];
+};
+
+static void slider_render(UIWidget* widget, Renderer* renderer, void* userdata) {
+    SliderData* data = userdata;
+    for (u8 i = 0; i < sp_arrlen(data->r); i++) {
+        renderer_draw(renderer, (RenderBox) {
+                .pos = data->r[i].pos,
+                .size = data->r[i].size,
+                .color = data->r[i].color,
+            });
     }
 }
 
-static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
-    switch (button) {
-        case GLFW_MOUSE_BUTTON_1:
-            mouse.buttons[UI_MOUSE_BUTTON_LEFT].pressed = action;
-            mouse.buttons[UI_MOUSE_BUTTON_LEFT].clicked = action;
-            break;
-        case GLFW_MOUSE_BUTTON_2:
-            mouse.buttons[UI_MOUSE_BUTTON_RIGHT].pressed = action;
-            mouse.buttons[UI_MOUSE_BUTTON_RIGHT].clicked = action;
-            break;
-        case GLFW_MOUSE_BUTTON_3:
-            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE].pressed = action;
-            mouse.buttons[UI_MOUSE_BUTTON_MIDDLE].clicked = action;
-            break;
+static UIWidget* slider(SP_Str id, f32* value, f32 min, f32 max) {
+    SP_Arena* arena = ui_get_arena();
+
+    ui_next_width(UI_SIZE_PIXELS(128.0f, 1.0));
+    ui_next_height(UI_SIZE_PIXELS(16.0f, 1.0));
+    ui_next_bg(sp_v4s(0.5f));
+    UIWidget* widget = ui_widget(sp_str_pushf(arena, "%.*s-container", id.len, id.data),
+            UI_WIDGET_FLAG_NONE);
+
+    SP_Vec2 widget_pos = widget->computed_absolute_position;
+    SP_Vec2 widget_size = widget->computed_size;
+    Rect nob = {0};
+    nob.size = sp_v2s(widget_size.y);
+
+    // Bar
+    Rect bar = {0};
+    bar.size = sp_v2(widget_size.x, 2.0f);
+    bar.size.x -= nob.size.x;
+    bar.pos = widget_pos;
+    bar.pos.x += nob.size.x / 2.0f;
+    bar.pos.y += widget_size.y / 2.0f;
+    bar.pos.y -= bar.size.y / 2.0f;
+    bar.color = sp_v4(0.3f, 0.3f, 0.3f, 1.0f);
+
+    // Fill
+    Rect fill = bar;
+    fill.size.x *= (*value - min) / (max - min);
+    fill.color = sp_v4(0.75f, 0.75f, 0.75f, 1.0f);
+
+    // Nob
+    nob.pos = widget_pos;
+    nob.pos.x += fill.size.x;
+    nob.color = sp_v4s(1.0f);
+
+    ui_next_width(UI_SIZE_PIXELS(nob.size.x, 1.0f));
+    ui_next_height(UI_SIZE_PIXELS(nob.size.y, 1.0f));
+    ui_next_fixed_x(nob.pos.x);
+    ui_next_fixed_y(nob.pos.y);
+    UIWidget* nob_widget = ui_widget(sp_str_pushf(arena, "%.*s-nob", id.len, id.data),
+            UI_WIDGET_FLAG_DRAW_BACKGROUND |
+            UI_WIDGET_FLAG_FLOATING |
+            UI_WIDGET_FLAG_INTERACTIVE);
+
+    UISignal signal = ui_signal(nob_widget);
+    if (signal.focused) {
+        *value += (mouse.pos_delta.x / widget_size.x) * (max - min);
     }
-}
+    *value = sp_clamp(*value, min, max);
 
-static void cursor_pos_callback(GLFWwindow* window, double xpos, double ypos) {
-    SP_Vec2 pos = sp_v2(xpos, ypos);
-    SP_Vec2 delta = sp_v2_sub(pos, mouse.pos);
-    mouse.pos = pos;
-    mouse.pos_delta = sp_v2_add(mouse.pos_delta, delta);
-}
+    SliderData* data = sp_arena_push_no_zero(arena, sizeof(SliderData));
+    *data = (SliderData) {
+        .bar = bar,
+        .fill = fill,
+    };
+    ui_widget_equip_render_func(widget, slider_render, data);
 
-static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    mouse.scroll += yoffset;
+    return widget;
 }
 
 i32 main(void) {
@@ -141,7 +233,6 @@ i32 main(void) {
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_pos_callback);
     glfwSetScrollCallback(window, scroll_callback);
-    // glfwSwapInterval(0);
 
     // Load GL functions
     gladLoadGL(glfwGetProcAddress);
@@ -185,7 +276,7 @@ i32 main(void) {
     f32 last = sp_os_get_time();
 
     SP_Vec2 window_pos = sp_v2s(128.0f);
-    b8 show_window = true;
+    b8 show_window = false;
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -218,39 +309,48 @@ i32 main(void) {
         UIWidget* container = ui_widget(sp_str_lit("container"), UI_WIDGET_FLAG_DRAW_BACKGROUND);
         ui_push_parent(container);
         {
-            ui_next_width(UI_SIZE_PIXELS(ui_top_font_size() * 6.0f, 1.0f));
-            ui_next_height(UI_SIZE_PIXELS(ui_top_font_size() * 2.0f, 1.0f));
-            ui_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
-            ui_next_text_align(UI_TEXT_ALIGN_CENTER);
-            UIWidget* button = ui_widget(sp_str_lit("Show Window"), UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_DRAW_TEXT);
-            UISignal signal = ui_signal(button);
-            if (signal.hovered) {
-                button->bg = sp_v4(0.5f, 0.2f, 0.2f, 1.0);
-            }
-            if (signal.pressed) {
-                button->bg = sp_v4(0.2f, 0.2f, 0.5f, 1.0);
-            }
-            if (signal.clicked) {
-                show_window = true;
-            }
+            spacer(UI_SIZE_PIXELS(16.0f, 1.0));
+            column() {
+                spacer(UI_SIZE_PIXELS(16.0f, 1.0));
 
-            checkbox(sp_str_pushf(arena, "checkbock%p", &show_window), &show_window);
+                ui_next_width(UI_SIZE_PIXELS(ui_top_font_size() * 6.0f, 1.0f));
+                ui_next_height(UI_SIZE_PIXELS(ui_top_font_size() * 2.0f, 1.0f));
+                ui_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
+                ui_next_text_align(UI_TEXT_ALIGN_CENTER);
+                UIWidget* button = ui_widget(sp_str_lit("Show Window"), UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_DRAW_TEXT);
+                UISignal signal = ui_signal(button);
+                if (signal.hovered) {
+                    button->bg = sp_v4(0.5f, 0.2f, 0.2f, 1.0);
+                }
+                if (signal.pressed) {
+                    button->bg = sp_v4(0.2f, 0.2f, 0.5f, 1.0);
+                }
+                if (signal.clicked) {
+                    show_window = true;
+                }
+
+                spacer(UI_SIZE_PIXELS(8.0f, 1.0));
+
+                row() {
+                    text(sp_str_lit("Window toggle: "));
+                    checkbox(sp_str_pushf(arena, "checkbock%p", &show_window), &show_window);
+                }
+
+                spacer(UI_SIZE_PIXELS(8.0f, 1.0));
+
+                row() {
+                    static f32 value = 0.0f;
+                    text(sp_str_pushf(arena, "Slider(%.2f): ", value));
+                    slider(sp_str_lit("slidervalue"), &value, 5.0f, 10.0f);
+                }
+
+                spacer(UI_SIZE_PIXELS(16.0f, 1.0));
+            }
 
             spacer(UI_SIZE_PARENT(1.0f, 0.0f));
 
             ui_push_width(UI_SIZE_TEXT(1.0f));
             ui_push_height(UI_SIZE_TEXT(1.0f));
-
-            ui_next_height(UI_SIZE_PARENT(1.0, 1.0));
-            ui_widget(sp_str_lit("Mouse:"), UI_WIDGET_FLAG_DRAW_TEXT);
-            spacer(UI_SIZE_PIXELS(8.0f, 1.0));
-            ui_next_width(UI_SIZE_CHILDREN(1.0));
-            ui_next_height(UI_SIZE_CHILDREN(1.0));
-            column() {
-                ui_widget(sp_str_pushf(ui_get_arena(), "Pos: (%.4f, %.4f)", mouse.pos.x, mouse.pos.y), UI_WIDGET_FLAG_DRAW_TEXT);
-                ui_widget(sp_str_pushf(ui_get_arena(), "Delta: (%.4f, %.4f)", mouse.pos_delta.x, mouse.pos_delta.y), UI_WIDGET_FLAG_DRAW_TEXT);
-                ui_widget(sp_str_pushf(ui_get_arena(), "Scroll: %.1f", mouse.scroll), UI_WIDGET_FLAG_DRAW_TEXT);
-            }
 
             spacer(UI_SIZE_PARENT(1.0f, 0.0f));
 

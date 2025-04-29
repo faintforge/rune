@@ -163,7 +163,7 @@ static UIWidget* slider(SP_Str id, f32* value, f32 min, f32 max) {
 
     ui_next_width(UI_SIZE_PIXELS(128.0f, 1.0));
     ui_next_height(UI_SIZE_PIXELS(16.0f, 1.0));
-    ui_next_bg(sp_v4s(0.5f));
+    ui_next_bg(sp_v4s(0.3f));
     UIWidget* widget = ui_widget(sp_str_pushf(arena, "%.*s-container", id.len, id.data),
             UI_WIDGET_FLAG_NONE);
 
@@ -172,30 +172,31 @@ static UIWidget* slider(SP_Str id, f32* value, f32 min, f32 max) {
     Rect nob = {0};
     nob.size = sp_v2s(widget_size.y);
 
+    f32 bar_width = widget_size.x - nob.size.x;
+
     // Bar
     Rect bar = {0};
-    bar.size = sp_v2(widget_size.x, 2.0f);
-    bar.size.x -= nob.size.x;
+    bar.size = sp_v2(bar_width, 2.0f);
     bar.pos = widget_pos;
     bar.pos.x += nob.size.x / 2.0f;
     bar.pos.y += widget_size.y / 2.0f;
     bar.pos.y -= bar.size.y / 2.0f;
     bar.color = sp_v4(0.3f, 0.3f, 0.3f, 1.0f);
 
-    // Fill
-    Rect fill = bar;
-    fill.size.x *= (*value - min) / (max - min);
-    fill.color = sp_v4(0.75f, 0.75f, 0.75f, 1.0f);
-
     // Nob
     nob.pos = widget_pos;
-    nob.pos.x += fill.size.x;
-    nob.color = sp_v4s(1.0f);
+    nob.pos.x += bar_width * ((*value - min) / (max - min));
+
+    // Fill
+    Rect fill = bar;
+    fill.size.x = nob.pos.x - bar.pos.x + nob.size.x / 2.0f;
+    fill.color = sp_v4(0.75f, 0.75f, 0.75f, 1.0f);
 
     ui_next_width(UI_SIZE_PIXELS(nob.size.x, 1.0f));
     ui_next_height(UI_SIZE_PIXELS(nob.size.y, 1.0f));
     ui_next_fixed_x(nob.pos.x);
     ui_next_fixed_y(nob.pos.y);
+    ui_next_bg(sp_v4(1.0f, 1.0f, 1.0f, 1.0f));
     UIWidget* nob_widget = ui_widget(sp_str_pushf(arena, "%.*s-nob", id.len, id.data),
             UI_WIDGET_FLAG_DRAW_BACKGROUND |
             UI_WIDGET_FLAG_FLOATING |
@@ -203,7 +204,7 @@ static UIWidget* slider(SP_Str id, f32* value, f32 min, f32 max) {
 
     UISignal signal = ui_signal(nob_widget);
     if (signal.focused) {
-        *value += (mouse.pos_delta.x / widget_size.x) * (max - min);
+        *value += (mouse.pos_delta.x / bar_width) * (max - min);
     }
     *value = sp_clamp(*value, min, max);
 
@@ -340,7 +341,7 @@ i32 main(void) {
 
                 row() {
                     static f32 value = 0.0f;
-                    text(sp_str_pushf(arena, "Slider(%.2f): ", value));
+                    text(sp_str_pushf(arena, "Slider: ", value));
                     slider(sp_str_lit("slidervalue"), &value, 5.0f, 10.0f);
                 }
 

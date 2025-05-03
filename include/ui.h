@@ -13,6 +13,11 @@ typedef enum UIWidgetFlags {
                                      UI_WIDGET_FLAG_FLOATING_Y,
     // Widget will consume interaction events and can generate signals.
     UI_WIDGET_FLAG_INTERACTIVE     = 1 << 4,
+    UI_WIDGET_FLAG_OVERFLOW_X      = 1 << 5,
+    UI_WIDGET_FLAG_OVERFLOW_Y      = 1 << 6,
+    UI_WIDGET_FLAG_OVERFLOW        = UI_WIDGET_FLAG_OVERFLOW_X |
+                                     UI_WIDGET_FLAG_OVERFLOW_Y,
+    UI_WIDGET_FLAG_CLIP            = 1 << 7,
 } UIWidgetFlags;
 
 typedef enum UIAxis {

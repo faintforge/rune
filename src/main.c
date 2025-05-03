@@ -376,10 +376,12 @@ i32 main(void) {
             ui_next_fixed_x(window_pos.x);
             ui_next_fixed_y(window_pos.y);
             ui_next_text_align(UI_TEXT_ALIGN_CENTER);
-            UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##window"),
+            UIWidget* draggable = ui_widget(sp_str_lit("Drag me!aaaaaaaaaaaaaaaaa##window"),
                     UI_WIDGET_FLAG_DRAW_BACKGROUND |
                     UI_WIDGET_FLAG_FLOATING |
-                    UI_WIDGET_FLAG_DRAW_TEXT);
+                    UI_WIDGET_FLAG_DRAW_TEXT |
+                    UI_WIDGET_FLAG_OVERFLOW_Y |
+                    UI_WIDGET_FLAG_CLIP);
             ui_push_parent(draggable);
             {
                 ui_next_bg(sp_v4(0.0f, 0.0f, 0.0f, 0.5f));
@@ -407,6 +409,13 @@ i32 main(void) {
                     spacer(UI_SIZE_PIXELS(8.0f, 1.0));
                 }
                 ui_pop_parent();
+
+                for (u32 i = 0; i < 32; i++) {
+                    ui_next_bg(sp_v4(1.0f / 32 * i, 0.3f, 0.3f, 1.0f));
+                    ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
+                    ui_next_height(UI_SIZE_PIXELS(8.0f, 1.0f));
+                    ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_DRAW_BACKGROUND);
+                }
             }
             ui_pop_parent();
         }
@@ -415,10 +424,21 @@ i32 main(void) {
 
         // Render
         glViewport(0.0f, 0.0f, screen_size.x, screen_size.y);
-        glScissor(0, 0, screen_size.x, screen_size.y);
+        // glScissor(0.0f, 0.0f, screen_size.x - 100.0f, screen_size.y - 10.0f);
+        // renderer_scissor(&renderer, (Scissor) {
+        //         sp_v2(0.0f, 0.0f),
+        //         sp_v2(100.0f, 100.0f),
+        //     });
 
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        // renderer_scissor(&renderer, (Scissor) {
+        //         .pos = sp_v2(100.0f, 100.0f),
+        //         .size = sp_v2(100.0f, 100.0f),
+        //     });
+        // glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
+        // glClear(GL_COLOR_BUFFER_BIT);
 
         renderer_begin(&renderer, screen_size);
         ui_draw(&renderer);

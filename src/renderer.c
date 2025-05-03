@@ -165,6 +165,12 @@ void renderer_begin(Renderer* renderer, SP_Ivec2 screen_size) {
     // Reset state
     renderer->curr_quad = 0;
     renderer->curr_texture = 1;
+
+    renderer->screen_size = screen_size;
+    renderer_scissor(renderer, (Scissor) {
+            .pos = sp_v2s(0.0f),
+            .size = sp_iv2_to_v2(screen_size),
+        });
 }
 
 void renderer_end(Renderer* renderer) {
@@ -265,4 +271,10 @@ void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font
             gpos.x += font_get_kerning(font, text.data[i], text.data[i+1]);
         }
     }
+}
+
+void renderer_scissor(Renderer *renderer, Scissor scissor) {
+    renderer->scissor = scissor;
+    scissor.pos.y = renderer->screen_size.y - scissor.size.y - scissor.pos.y;
+    glScissor((i32) scissor.pos.x, (i32) scissor.pos.y, scissor.size.x, scissor.size.y);
 }

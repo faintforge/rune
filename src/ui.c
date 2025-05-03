@@ -236,6 +236,10 @@ static void solve_size_violations(UIWidget* widget) {
 
     SP_Vec2 child_sum = sum_child_size(widget);
     for (u8 i = 0; i < UI_AXIS_COUNT; i++) {
+        if (widget->flags & UI_WIDGET_FLAG_OVERFLOW_X << i) {
+            continue;
+        }
+
         f32 violation_amount = child_sum.elements[i] - widget->computed_size.elements[i];
 
         // Violation
@@ -331,6 +335,18 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
         return;
     }
 
+    b8 reset_scissor = false;
+    Scissor last_scissor = renderer->scissor;
+    if (widget->flags & UI_WIDGET_FLAG_CLIP) {
+        renderer_end(renderer);
+        renderer_begin(renderer, renderer->screen_size);
+        renderer_scissor(renderer, (Scissor) {
+                .pos = widget->computed_absolute_position,
+                .size = widget->computed_size,
+            });
+        reset_scissor = true;
+    }
+
     if (widget->flags & UI_WIDGET_FLAG_DRAW_BACKGROUND) {
         renderer_draw(renderer, (RenderBox) {
                 .pos = widget->computed_absolute_position,
@@ -376,6 +392,12 @@ static void ui_draw_helper(Renderer* renderer, UIWidget* widget) {
 
     // Depth-first
     ui_draw_helper(renderer, widget->child_first);
+
+    if (reset_scissor) {
+        renderer_end(renderer);
+        renderer_begin(renderer, renderer->screen_size);
+        renderer_scissor(renderer, last_scissor);
+    }
     ui_draw_helper(renderer, widget->next);
 }
 

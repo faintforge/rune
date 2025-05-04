@@ -265,7 +265,19 @@ static void solve_size_violations(UIWidget* widget) {
                 curr_child->computed_size.elements[i] = floorf(curr_child->computed_size.elements[i]);
             }
         }
+
     }
+}
+
+static void assign_child_size_sum(UIWidget* widget) {
+    if (widget == NULL) {
+        return;
+    }
+
+    widget->child_size_sum = sum_child_size(widget);
+
+    assign_child_size_sum(widget->next);
+    assign_child_size_sum(widget->child_first);
 }
 
 static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
@@ -279,7 +291,8 @@ static void build_positions(UIWidget* widget, SP_Vec2 relative_position) {
             if (widget->parent == NULL) {
                 widget->computed_absolute_position.elements[axis] = relative_position.elements[axis];
             } else {
-                widget->computed_absolute_position.elements[axis] = widget->parent->computed_absolute_position.elements[axis] + relative_position.elements[axis];
+                UIWidget* parent = widget->parent;
+                widget->computed_absolute_position.elements[axis] = parent->computed_absolute_position.elements[axis] + relative_position.elements[axis] + parent->view_offset.elements[axis];
                 UIAxis flow = widget->parent->flow;
                 if (flow == axis) {
                     relative_position.elements[flow] += widget->computed_size.elements[flow];
@@ -299,6 +312,7 @@ void ui_end(void) {
     build_child_sizes(&ctx.container);
     build_parent_sizes(&ctx.container);
     solve_size_violations(&ctx.container);
+    assign_child_size_sum(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));
 
     UIWidget* remove_stack = NULL;
@@ -500,6 +514,8 @@ UIWidget* ui_widget(SP_Str text, UIWidgetFlags flags) {
         // Retain possible state from the last frame
         .computed_absolute_position = widget->computed_absolute_position,
         .computed_size = widget->computed_size,
+        .view_offset = widget->view_offset,
+        .child_size_sum = widget->child_size_sum,
 
         .bg = ui_top_bg(),
         .fg = ui_top_fg(),
@@ -544,6 +560,18 @@ UISignal ui_signal(UIWidget* widget) {
     if (focused) {
         drag = ctx.mouse.pos_delta;
     }
+    f32 scroll = 0.0f;
+    if (hovered) {
+        scroll = ctx.mouse.scroll;
+    }
+
+    if (widget->flags & UI_WIDGET_FLAG_VIEW_SCROLL) {
+        f32 child_height = widget->child_size_sum.y;
+        f32 view_height = widget->computed_size.y;
+        f32 scroll_bound = child_height - view_height;
+        widget->view_offset.y += scroll * 32.0f;
+        widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);
+    }
 
     UISignal signal = {
         .hovered = hovered,
@@ -551,6 +579,7 @@ UISignal ui_signal(UIWidget* widget) {
         .clicked = clicked,
         .focused = focused,
         .drag = drag,
+        .scroll = scroll,
     };
     return signal;
 }

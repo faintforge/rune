@@ -18,6 +18,7 @@ typedef enum UIWidgetFlags {
     UI_WIDGET_FLAG_OVERFLOW        = UI_WIDGET_FLAG_OVERFLOW_X |
                                      UI_WIDGET_FLAG_OVERFLOW_Y,
     UI_WIDGET_FLAG_CLIP            = 1 << 7,
+    UI_WIDGET_FLAG_VIEW_SCROLL     = 1 << 8,
 } UIWidgetFlags;
 
 typedef enum UIAxis {
@@ -61,6 +62,7 @@ struct UIWidget {
     // Children
     UIWidget* child_first;
     UIWidget* child_last;
+    SP_Vec2 child_size_sum;
 
     UIWidget* stack_next;
 
@@ -70,6 +72,7 @@ struct UIWidget {
     SP_Vec2 computed_relative_position;
     SP_Vec2 computed_absolute_position;
     SP_Vec2 computed_size;
+    SP_Vec2 view_offset;
 
     SP_Str id;
     SP_Str text;
@@ -123,6 +126,7 @@ struct UISignal {
     b8 clicked;
     b8 focused;
     SP_Vec2 drag;
+    f32 scroll;
 };
 
 extern void ui_init(UIStyleStack default_style_stack);

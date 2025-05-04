@@ -278,6 +278,7 @@ i32 main(void) {
 
     SP_Vec2 window_pos = sp_v2s(128.0f);
     b8 show_window = false;
+    SP_Vec2 view_offset = sp_v2s(0.0f);
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -376,12 +377,10 @@ i32 main(void) {
             ui_next_fixed_x(window_pos.x);
             ui_next_fixed_y(window_pos.y);
             ui_next_text_align(UI_TEXT_ALIGN_CENTER);
-            UIWidget* draggable = ui_widget(sp_str_lit("Drag me!aaaaaaaaaaaaaaaaa##window"),
+            UIWidget* draggable = ui_widget(sp_str_lit("Drag me!##window"),
                     UI_WIDGET_FLAG_DRAW_BACKGROUND |
                     UI_WIDGET_FLAG_FLOATING |
-                    UI_WIDGET_FLAG_DRAW_TEXT |
-                    UI_WIDGET_FLAG_OVERFLOW_Y |
-                    UI_WIDGET_FLAG_CLIP);
+                    UI_WIDGET_FLAG_DRAW_TEXT);
             ui_push_parent(draggable);
             {
                 ui_next_bg(sp_v4(0.0f, 0.0f, 0.0f, 0.5f));
@@ -410,12 +409,24 @@ i32 main(void) {
                 }
                 ui_pop_parent();
 
-                for (u32 i = 0; i < 32; i++) {
-                    ui_next_bg(sp_v4(1.0f / 32 * i, 0.3f, 0.3f, 1.0f));
-                    ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
-                    ui_next_height(UI_SIZE_PIXELS(8.0f, 1.0f));
-                    ui_widget(sp_str_lit(""), UI_WIDGET_FLAG_DRAW_BACKGROUND);
+                ui_next_width(UI_SIZE_PARENT(1.0f, 0.0f));
+                ui_next_height(UI_SIZE_PARENT(1.0f, 0.0f));
+                UIWidget* content = ui_widget(sp_str_lit("##content"), UI_WIDGET_FLAG_INTERACTIVE |
+                        UI_WIDGET_FLAG_OVERFLOW_Y |
+                        UI_WIDGET_FLAG_CLIP |
+                        UI_WIDGET_FLAG_VIEW_SCROLL);
+                ui_signal(content);
+
+                ui_push_parent(content);
+                {
+                    for (u32 i = 0; i < 32; i++) {
+                        ui_next_bg(sp_v4(1.0f / 32 * i, 0.3f, 0.3f, 1.0f));
+                        ui_next_width(UI_SIZE_PARENT(1.0f, 1.0f));
+                        ui_next_height(UI_SIZE_TEXT(1.0f));
+                        ui_widget(sp_str_pushf(arena, "%d", i), UI_WIDGET_FLAG_DRAW_BACKGROUND | UI_WIDGET_FLAG_DRAW_TEXT);
+                    }
                 }
+                ui_pop_parent();
             }
             ui_pop_parent();
         }
@@ -424,21 +435,8 @@ i32 main(void) {
 
         // Render
         glViewport(0.0f, 0.0f, screen_size.x, screen_size.y);
-        // glScissor(0.0f, 0.0f, screen_size.x - 100.0f, screen_size.y - 10.0f);
-        // renderer_scissor(&renderer, (Scissor) {
-        //         sp_v2(0.0f, 0.0f),
-        //         sp_v2(100.0f, 100.0f),
-        //     });
-
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-
-        // renderer_scissor(&renderer, (Scissor) {
-        //         .pos = sp_v2(100.0f, 100.0f),
-        //         .size = sp_v2(100.0f, 100.0f),
-        //     });
-        // glClearColor(1.0f, 0.0f, 0.0f, 1.0f);
-        // glClear(GL_COLOR_BUFFER_BIT);
 
         renderer_begin(&renderer, screen_size);
         ui_draw(&renderer);

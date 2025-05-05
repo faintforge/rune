@@ -129,9 +129,17 @@ static void checkbox_render(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void*
     SP_Vec2 pos = widget->computed_absolute_position;
     pos = sp_v2_add(pos, sp_v2_divs(sp_v2_sub(widget->computed_size, size), 2.0f));
 
-    rne_draw_rect_filled(buffer, (RNE_DrawRect) {
-            .pos = pos,
-            .size = size,
+    // rne_draw_rect_filled(buffer, (RNE_DrawRect) {
+    //         .pos = pos,
+    //         .size = size,
+    //         .color = sp_color_rgba_f(0.75f, 0.75f, 0.75f, 1.0f),
+    //     });
+
+    f32 radius = size.x / 2.0f;
+    rne_draw_circle_filled(buffer, (RNE_DrawCircle) {
+            .pos = sp_v2_adds(pos, radius),
+            .radius = radius,
+            .segments = 16,
             .color = sp_color_rgba_f(0.75f, 0.75f, 0.75f, 1.0f),
         });
 }
@@ -463,24 +471,21 @@ i32 main(void) {
         RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
 
         // RNE_DrawCmdBuffer buffer = rne_draw_buffer_begin(frame_arena);
-        // rne_draw_rect_filled(&buffer, (RNE_DrawRect) {
-        //         .pos = sp_v2s(16.0f),
-        //         .size = sp_v2s(128.0f),
-        //         .corner_radius = 8.0f,
-        //         .corner_segments = 8,
-        //         .color = SP_COLOR_WHITE,
+        // rne_draw_scissor(&buffer, (RNE_DrawScissor) {
+        //         .pos = sp_v2s(0.0f),
+        //         .size = sp_v2s(256.0f),
         //     });
-        // rne_draw_rect_stroke(&buffer, (RNE_DrawRect) {
-        //         .pos = sp_v2s(16.0f),
-        //         .size = sp_v2s(128.0f),
-        //         .corner_radius = 8.0f,
-        //         .corner_segments = 8,
-        //         .color = SP_COLOR_RED,
-        //     }, 4.0f);
+        // rne_draw_circle_filled(&buffer, (RNE_DrawCircle) {
+        //         .pos = sp_v2s(256.0f),
+        //         .radius = 32.0f,
+        //         .color = SP_COLOR_GREEN,
+        //         .segments = 32,
+        //     });
 
         glViewport(0, 0, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+        glScissor(0, 0, screen_size.x, screen_size.y);
 
         RNE_BatchCmd batch;
         RNE_TessellationState state = {0};
@@ -498,7 +503,10 @@ i32 main(void) {
             new_renderer_update_buffers(&nr, batch.vertex_count, batch.index_count);
             u32 count = 0;
             for (RNE_RenderCmd* cmd = batch.render_cmds; cmd != NULL; cmd = cmd->next) {
-                glScissor(cmd->scissor.pos.x, cmd->scissor.pos.y, cmd->scissor.size.x, cmd->scissor.size.y);
+                glScissor((i32) cmd->scissor.pos.x,
+                        (i32) (screen_size.y - cmd->scissor.size.y - cmd->scissor.pos.y),
+                        cmd->scissor.size.x,
+                        cmd->scissor.size.y);
                 glDrawElements(GL_TRIANGLES, cmd->index_count, GL_UNSIGNED_SHORT, (const void*) (u64) cmd->start_offset_bytes);
                 count++;
             }

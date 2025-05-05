@@ -118,9 +118,13 @@ struct RNE_DrawCmdBuffer {
 extern RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena);
 extern void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd);
 
+extern void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line);
+extern void rne_draw_arc_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawArc arc);
+extern void rne_draw_arc_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawArc arc, f32 thickness);
+extern void rne_draw_circle_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawCircle circle);
+extern void rne_draw_circle_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawCircle circle, f32 thickness);
 extern void rne_draw_rect_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect);
 extern void rne_draw_rect_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect, f32 thickness);
-extern void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line);
 extern void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text);
 extern void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor);
 

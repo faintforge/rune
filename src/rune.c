@@ -658,6 +658,52 @@ void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd) {
     sp_sll_queue_push(buffer->first, buffer->last, cmd_copy);
 }
 
+void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_LINE,
+            .filled = false,
+            .closed = false,
+            .thickness = line.thickness,
+            .data.line = line,
+        });
+}
+
+void rne_draw_arc_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawArc arc) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_ARC,
+            .filled = true,
+            .data.arc = arc,
+        });
+}
+
+void rne_draw_arc_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawArc arc, f32 thickness) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_ARC,
+            .filled = false,
+            .closed = false,
+            .thickness = thickness,
+            .data.arc = arc,
+        });
+}
+
+void rne_draw_circle_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawCircle circle) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_CIRCLE,
+            .filled = true,
+            .data.circle = circle,
+        });
+}
+
+void rne_draw_circle_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawCircle circle, f32 thickness) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_CIRCLE,
+            .filled = false,
+            .closed = false,
+            .thickness = thickness,
+            .data.circle = circle,
+        });
+}
+
 void rne_draw_rect_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect) {
     rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
             .type = RNE_DRAW_CMD_TYPE_RECT,
@@ -673,16 +719,6 @@ void rne_draw_rect_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect, f32 thic
             .closed = true,
             .thickness = thickness,
             .data.rect = rect,
-        });
-}
-
-void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line) {
-    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
-            .type = RNE_DRAW_CMD_TYPE_LINE,
-            .filled = false,
-            .closed = false,
-            .thickness = line.thickness,
-            .data.line = line,
         });
 }
 
@@ -1040,6 +1076,12 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
             } break;
             case RNE_DRAW_CMD_TYPE_ARC:
                 push_arc(&path, cmd->data.arc);
+                if (cmd->filled) {
+                    push_point(&path, (RNE_Vertex) {
+                            .pos = cmd->data.arc.pos,
+                            .color = cmd->data.arc.color,
+                        });
+                }
                 break;
             case RNE_DRAW_CMD_TYPE_CIRCLE:
                 push_circle(&path, cmd->data.circle);
@@ -1054,9 +1096,11 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
                 *render_cmd = (RNE_RenderCmd) {
                     .start_offset_bytes = (index_end - index_count) * sizeof(u16),
                     .index_count = index_count,
-                    .scissor = cmd->data.scissor,
+                    .scissor = state->current_scissor,
                 };
                 sp_sll_queue_push(first, last, render_cmd);
+                index_count = 0;
+                state->current_scissor = cmd->data.scissor;
             } break;
         }
 

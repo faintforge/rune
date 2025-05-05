@@ -1,6 +1,4 @@
 #include "rune.h"
-#include "font.h"
-#include "renderer.h"
 #include "spire.h"
 
 #include <math.h>
@@ -14,7 +12,7 @@
     X(Height, height, RNE_Size) \
     X(Bg, bg, SP_Color) \
     X(Fg, fg, SP_Color) \
-    X(Font, font, Font*) \
+    X(Font, font, RNE_Handle) \
     X(FontSize, font_size, u32) \
     X(Flow, flow, RNE_Axis) \
     X(Parent, parent, RNE_Widget*) \
@@ -46,6 +44,8 @@ struct RNE_Context {
 
     RNE_Widget* focused_widget;
     RNE_Mouse mouse;
+
+    RNE_FontInterface font;
 
     // Styles
     RNE_StyleStack default_style_stack;
@@ -85,13 +85,14 @@ static void generate_header_functions(void) {
     #undef X
 }
 
-void rne_init(RNE_StyleStack default_style_stack) {
+void rne_init(RNE_FontInterface font, RNE_StyleStack default_style_stack) {
     ctx = (RNE_Context) {
         .arena = sp_arena_create(),
         .frame_arenas = {
             sp_arena_create(),
             sp_arena_create(),
         },
+        .font = font,
         .default_style_stack = default_style_stack,
     };
     sp_arena_tag(ctx.arena, sp_str_lit("ui-state"));
@@ -149,8 +150,7 @@ static void build_fixed_sizes(RNE_Widget* widget) {
     SP_Vec2 text_size = sp_v2s(0.0f);
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
         if (widget->size[i].kind == RNE_SIZE_KIND_TEXT) {
-            font_set_size(widget->font, widget->font_size);
-            text_size = font_measure_string(widget->font, widget->text);
+            text_size = ctx.font.measure(widget->font, widget->text, widget->font_size);
             break;
         }
     }
@@ -367,20 +367,16 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     }
 
     if (widget->flags & RNE_WIDGET_FLAG_DRAW_TEXT) {
-        font_set_size(widget->font, widget->font_size);
-        FontMetrics metrics = font_get_metrics(widget->font);
-
         SP_Vec2 pos = widget->computed_absolute_position;
+        SP_Vec2 text_size = ctx.font.measure(widget->font, widget->text, widget->font_size);
         switch (widget->text_align) {
             case RNE_TEXT_ALIGN_LEFT:
                 break;
             case RNE_TEXT_ALIGN_CENTER: {
-                SP_Vec2 text_size = font_measure_string(widget->font, widget->text);
                 pos.x += widget->computed_size.x / 2.0f;
                 pos.x -= text_size.x / 2.0f;
             } break;
             case RNE_TEXT_ALIGN_RIGHT: {
-                SP_Vec2 text_size = font_measure_string(widget->font, widget->text);
                 pos.x += widget->computed_size.x;
                 pos.x -= text_size.x;
             } break;
@@ -388,7 +384,7 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
 
         // Center text vertically
         pos.y += widget->computed_size.y / 2.0f;
-        pos.y -= (metrics.ascent - metrics.descent) / 2.0f;
+        pos.y -= text_size.y / 2.0f;
 
         rne_draw_text(buffer, (RNE_DrawText) {
                 .pos = pos,
@@ -408,8 +404,8 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
 
     if (reset_scissor) {
         rne_draw_scissor(buffer, (RNE_DrawScissor) {
-                .pos = sp_v2s(-(1<<16)),
-                .size = sp_v2s(1<<16),
+                .pos = sp_v2s(-(1<<13)),
+                .size = sp_v2s(1<<14),
             });
     }
     rne_draw_helper(buffer, widget->next);

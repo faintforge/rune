@@ -7,6 +7,24 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+SP_Vec2 measure(RNE_Handle font, SP_Str text, f32 height) {
+    Font* f = font.ptr;
+    font_set_size(f, height);
+    return font_measure_string(f, text);
+}
+
+RNE_Glyph query(RNE_Handle font, u32 codepoint, f32 height) {
+    Font* f = font.ptr;
+    font_set_size(f, height);
+    Glyph g = font_get_glyph(f, codepoint);
+    return (RNE_Glyph) {
+        .size = g.size,
+        .offset = g.offset,
+        .advance = g.advance,
+        .uv = { g.uv[0], g.uv[1] }
+    };
+}
+
 static RNE_Mouse mouse = {0};
 static void reset_mouse(void) {
     mouse.pos_delta = sp_v2s(0.0f);
@@ -251,7 +269,10 @@ i32 main(void) {
     // Font* font = font_create(arena, sp_str_lit("assets/Tiny5/Tiny5-Regular.ttf"));
     Font* font = font_create(arena, sp_str_lit("assets/Roboto_Mono/static/RobotoMono-Regular.ttf"));
 
-    rne_init((RNE_StyleStack) {
+    rne_init((RNE_FontInterface) {
+            .measure = measure,
+            .query = query,
+        }, (RNE_StyleStack) {
             .size = {
                 [RNE_AXIS_HORIZONTAL] = {
                     .kind = RNE_SIZE_KIND_CHILDREN,
@@ -438,7 +459,6 @@ i32 main(void) {
         // Render
         RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
 
-        glViewport(0.0f, 0.0f, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 

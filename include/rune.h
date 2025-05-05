@@ -1,14 +1,35 @@
 #pragma once
 
 #include "spire.h"
-#include "font.h"
 
-// Drawing API
 typedef union RNE_Handle RNE_Handle;
 union RNE_Handle {
     void* ptr;
     u64 id;
 };
+
+// -- Font API -----------------------------------------------------------------
+
+typedef struct RNE_Glyph RNE_Glyph;
+struct RNE_Glyph {
+    SP_Vec2 size;
+    SP_Vec2 offset;
+    f32 advance;
+    // [0] = Top left
+    // [1] = Bottom right
+    SP_Vec2 uv[2];
+};
+
+typedef SP_Vec2 (*RNE_TextMeasureFunc)(RNE_Handle font, SP_Str text, f32 height);
+typedef RNE_Glyph (*RNE_FontQueryFunc)(RNE_Handle font, u32 codepoint, f32 height);
+
+typedef struct RNE_FontInterface RNE_FontInterface;
+struct RNE_FontInterface {
+    RNE_TextMeasureFunc measure;
+    RNE_FontQueryFunc query;
+};
+
+// -- Drawing API --------------------------------------------------------------
 
 typedef enum RNE_DrawCmdType {
     RNE_DRAW_CMD_TYPE_RECT,
@@ -82,6 +103,8 @@ extern void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line);
 extern void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text);
 extern void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor);
 
+
+// -- Widget API ---------------------------------------------------------------
 
 typedef enum RNE_WidgetFlags {
     RNE_WIDGET_FLAG_NONE            = 0,
@@ -164,7 +187,7 @@ struct RNE_Widget {
     // Style
     SP_Color bg;
     SP_Color fg;
-    Font* font;
+    RNE_Handle font;
     u32 font_size;
     RNE_Axis flow;
     RNE_TextAlign text_align;
@@ -175,7 +198,7 @@ struct RNE_StyleStack {
     RNE_Size size[RNE_AXIS_COUNT];
     SP_Color bg;
     SP_Color fg;
-    Font* font;
+    RNE_Handle font;
     u32 font_size;
     RNE_Axis flow;
     RNE_TextAlign text_align;
@@ -209,7 +232,7 @@ struct RNE_Signal {
     f32 scroll;
 };
 
-extern void rne_init(RNE_StyleStack default_style_stack);
+extern void rne_init(RNE_FontInterface font, RNE_StyleStack default_style_stack);
 extern void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse);
 extern void rne_end(void);
 extern RNE_DrawCmdBuffer rne_draw(SP_Arena* arena);
@@ -248,7 +271,7 @@ extern void rne_push_width(RNE_Size value);
 extern void rne_push_height(RNE_Size value);
 extern void rne_push_bg(SP_Color value);
 extern void rne_push_fg(SP_Color value);
-extern void rne_push_font(Font* value);
+extern void rne_push_font(RNE_Handle value);
 extern void rne_push_font_size(u32 value);
 extern void rne_push_flow(RNE_Axis value);
 extern void rne_push_parent(RNE_Widget* value);
@@ -260,7 +283,7 @@ extern RNE_Size rne_pop_width(void);
 extern RNE_Size rne_pop_height(void);
 extern SP_Color rne_pop_bg(void);
 extern SP_Color rne_pop_fg(void);
-extern Font* rne_pop_font(void);
+extern RNE_Handle rne_pop_font(void);
 extern u32 rne_pop_font_size(void);
 extern RNE_Axis rne_pop_flow(void);
 extern RNE_Widget* rne_pop_parent(void);
@@ -272,7 +295,7 @@ extern void rne_next_width(RNE_Size value);
 extern void rne_next_height(RNE_Size value);
 extern void rne_next_bg(SP_Color value);
 extern void rne_next_fg(SP_Color value);
-extern void rne_next_font(Font* value);
+extern void rne_next_font(RNE_Handle value);
 extern void rne_next_font_size(u32 value);
 extern void rne_next_flow(RNE_Axis value);
 extern void rne_next_parent(RNE_Widget* value);
@@ -284,7 +307,7 @@ extern RNE_Size rne_top_width(void);
 extern RNE_Size rne_top_height(void);
 extern SP_Color rne_top_bg(void);
 extern SP_Color rne_top_fg(void);
-extern Font* rne_top_font(void);
+extern RNE_Handle rne_top_font(void);
 extern u32 rne_top_font_size(void);
 extern RNE_Axis rne_top_flow(void);
 extern RNE_Widget* rne_top_parent(void);

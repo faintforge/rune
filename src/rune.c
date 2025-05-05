@@ -543,6 +543,13 @@ void rne_widget_equip_render_func(RNE_Widget* widget, RNE_WidgetRenderFunc func,
 }
 
 RNE_Signal rne_signal(RNE_Widget* widget) {
+    if (!(widget->flags & RNE_WIDGET_FLAG_INTERACTIVE)) {
+        return (RNE_Signal) {0};
+    }
+
+    // TODO: Occlusion. Two interactive elements on top of eachother isn't
+    // handled right now.
+
     SP_Vec2 mpos = ctx.mouse.pos;
     f32 left = widget->computed_absolute_position.x;
     f32 right = left + widget->computed_size.x;

@@ -319,7 +319,7 @@ i32 main(void) {
                 rne_next_height(RNE_SIZE_PIXELS(rne_top_font_size() * 2.0f, 1.0f));
                 rne_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
                 rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
-                RNE_Widget* button = rne_widget(sp_str_lit("Show Window"), RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_DRAW_TEXT);
+                RNE_Widget* button = rne_widget(sp_str_lit("Show Window"), RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_DRAW_TEXT | RNE_WIDGET_FLAG_INTERACTIVE);
                 RNE_Signal signal = rne_signal(button);
                 if (signal.hovered) {
                     button->bg = sp_v4(0.5f, 0.2f, 0.2f, 1.0);
@@ -388,7 +388,7 @@ i32 main(void) {
                 rne_next_height(RNE_SIZE_PIXELS(32.0f, 1.0f));
                 // rne_next_height(RNE_SIZE_CHILDREN(1.0f));
                 rne_next_flow(RNE_AXIS_HORIZONTAL);
-                RNE_Widget* drag_bar = rne_widget(sp_str_lit("##dragbar"), RNE_WIDGET_FLAG_DRAW_BACKGROUND);
+                RNE_Widget* drag_bar = rne_widget(sp_str_lit("##dragbar"), RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_INTERACTIVE);
                 RNE_Signal signal = rne_signal(drag_bar);
                 if (signal.focused) {
                     window_pos = sp_v2_add(window_pos, signal.drag);
@@ -400,7 +400,7 @@ i32 main(void) {
 
                     rne_next_width(RNE_SIZE_TEXT(1.0f));
                     rne_next_height(RNE_SIZE_PARENT(1.0f, 1.0f));
-                    RNE_Widget* close_button = rne_widget(sp_str_lit("X##close_button"), RNE_WIDGET_FLAG_DRAW_TEXT);
+                    RNE_Widget* close_button = rne_widget(sp_str_lit("X##close_button"), RNE_WIDGET_FLAG_DRAW_TEXT | RNE_WIDGET_FLAG_INTERACTIVE);
                     if (rne_signal(close_button).clicked) {
                         show_window = false;
                     }

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(ui LANGUAGES C)
+project(rune LANGUAGES C)
 
 add_subdirectory("spire/")
 add_subdirectory("third_party/glad/")

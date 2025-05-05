@@ -8,7 +8,7 @@ union RNE_Handle {
     u64 id;
 };
 
-// -- Font API -----------------------------------------------------------------
+// -- Font ---------------------------------------------------------------------
 
 typedef struct RNE_Glyph RNE_Glyph;
 struct RNE_Glyph {
@@ -29,14 +29,42 @@ struct RNE_FontInterface {
     RNE_FontQueryFunc query;
 };
 
-// -- Drawing API --------------------------------------------------------------
+// -- Drawing ------------------------------------------------------------------
 
 typedef enum RNE_DrawCmdType {
-    RNE_DRAW_CMD_TYPE_RECT,
     RNE_DRAW_CMD_TYPE_LINE,
+    RNE_DRAW_CMD_TYPE_ARC,
+    RNE_DRAW_CMD_TYPE_CIRCLE,
+    RNE_DRAW_CMD_TYPE_RECT,
     RNE_DRAW_CMD_TYPE_TEXT,
     RNE_DRAW_CMD_TYPE_SCISSOR,
 } RNE_DrawCmdType;
+
+typedef struct RNE_DrawLine RNE_DrawLine;
+struct RNE_DrawLine {
+    SP_Vec2 a;
+    SP_Vec2 b;
+    SP_Color color;
+    f32 thickness;
+};
+
+typedef struct RNE_DrawArc RNE_DrawArc;
+struct RNE_DrawArc {
+    SP_Vec2 pos;
+    f32 radius;
+    f32 start_angle;
+    f32 end_angle;
+    SP_Color color;
+    u32 segments;
+};
+
+typedef struct RNE_DrawCircle RNE_DrawCircle;
+struct RNE_DrawCircle {
+    SP_Vec2 pos;
+    f32 radius;
+    SP_Color color;
+    u32 segments;
+};
 
 typedef struct RNE_DrawRect RNE_DrawRect;
 struct RNE_DrawRect {
@@ -62,26 +90,19 @@ struct RNE_DrawScissor {
     SP_Vec2 size;
 };
 
-typedef struct RNE_DrawLine RNE_DrawLine;
-struct RNE_DrawLine {
-    SP_Vec2 a;
-    SP_Vec2 b;
-    SP_Color color;
-    f32 thickness;
-};
-
 typedef struct RNE_DrawCmd RNE_DrawCmd;
 struct RNE_DrawCmd {
     RNE_DrawCmd* next;
 
     RNE_DrawCmdType type;
     f32 thickness;
-    b8 stroke;
     b8 filled;
     b8 closed;
     union {
-        RNE_DrawRect rect;
         RNE_DrawLine line;
+        RNE_DrawArc arc;
+        RNE_DrawCircle circle;
+        RNE_DrawRect rect;
         RNE_DrawText text;
         RNE_DrawScissor scissor;
     } data;
@@ -103,8 +124,55 @@ extern void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line);
 extern void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text);
 extern void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor);
 
+// -- Tessellation -------------------------------------------------------------
 
-// -- Widget API ---------------------------------------------------------------
+typedef struct RNE_Vertex RNE_Vertex;
+struct RNE_Vertex {
+    SP_Vec2 pos;
+    SP_Vec2 uv;
+    SP_Color color;
+};
+
+typedef struct RNE_TessellationConfig RNE_TessellationConfig;
+struct RNE_TessellationConfig {
+    SP_Arena* arena;
+
+    RNE_Vertex* vertex_buffer;
+    u32 vertex_capacity;
+
+    u16* index_buffer;
+    u32 index_capacity;
+};
+
+typedef struct RNE_RenderCmd RNE_RenderCmd;
+struct RNE_RenderCmd {
+    RNE_RenderCmd* next;
+
+    u32 start_offset_bytes;
+    u32 index_count;
+    RNE_DrawScissor scissor;
+};
+
+typedef struct RNE_BatchCmd RNE_BatchCmd;
+struct RNE_BatchCmd {
+    u32 vertex_count;
+    u32 index_count;
+    RNE_RenderCmd* render_cmds;
+};
+
+typedef struct RNE_TessellationState RNE_TessellationState;
+struct RNE_TessellationState {
+    b8 finished;
+    b8 not_first_call;
+    RNE_DrawCmd* current_cmd;
+    RNE_DrawScissor current_scissor;
+};
+
+extern RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
+        RNE_TessellationConfig config,
+        RNE_TessellationState* state);
+
+// -- Widget -------------------------------------------------------------------
 
 typedef enum RNE_WidgetFlags {
     RNE_WIDGET_FLAG_NONE            = 0,

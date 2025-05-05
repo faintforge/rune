@@ -1,3 +1,4 @@
+#include "new_renderer.h"
 #include "spire.h"
 #include "renderer.h"
 #include "font.h"
@@ -264,6 +265,8 @@ i32 main(void) {
 
     // Create renderer
     Renderer renderer = renderer_create(arena);
+    NewRenderer nr = new_renderer_create();
+
     // Font* font = font_create(arena, sp_str_lit("assets/Roboto/Roboto-Regular.ttf"));
     // Font* font = font_create(arena, sp_str_lit("assets/Spline_Sans/static/SplineSans-Regular.ttf"));
     // Font* font = font_create(arena, sp_str_lit("assets/Tiny5/Tiny5-Regular.ttf"));
@@ -459,36 +462,48 @@ i32 main(void) {
         // Render
         RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
 
+        // RNE_DrawCmdBuffer buffer = rne_draw_buffer_begin(frame_arena);
+        // rne_draw_rect_filled(&buffer, (RNE_DrawRect) {
+        //         .pos = sp_v2s(16.0f),
+        //         .size = sp_v2s(128.0f),
+        //         .corner_radius = 8.0f,
+        //         .corner_segments = 8,
+        //         .color = SP_COLOR_WHITE,
+        //     });
+        // rne_draw_rect_stroke(&buffer, (RNE_DrawRect) {
+        //         .pos = sp_v2s(16.0f),
+        //         .size = sp_v2s(128.0f),
+        //         .corner_radius = 8.0f,
+        //         .corner_segments = 8,
+        //         .color = SP_COLOR_RED,
+        //     }, 4.0f);
+
+        glViewport(0, 0, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
-        renderer_begin(&renderer, screen_size);
-        for (RNE_DrawCmd* cmd = buffer.first; cmd != NULL; cmd = cmd->next) {
-            switch (cmd->type) {
-                case RNE_DRAW_CMD_TYPE_RECT:
-                    renderer_draw(&renderer, (RenderBox) {
-                            .pos = cmd->data.rect.pos,
-                            .size = cmd->data.rect.size,
-                            .color = cmd->data.rect.color,
-                        });
-                    break;
-                case RNE_DRAW_CMD_TYPE_TEXT:
-                    renderer_draw_text(&renderer, cmd->data.text.pos, cmd->data.text.text, cmd->data.text.font_handle.ptr, cmd->data.text.color);
-                    break;
-                case RNE_DRAW_CMD_TYPE_SCISSOR:
-                    renderer_end(&renderer);
-                    renderer_begin(&renderer, screen_size);
-                    renderer_scissor(&renderer, (Scissor) {
-                            .pos = cmd->data.scissor.pos,
-                            .size = cmd->data.scissor.size,
-                        });
-                    break;
-                default:
-                    sp_assert(false, "Unsupported drawing primitive!");
-                    break;
+        RNE_BatchCmd batch;
+        RNE_TessellationState state = {0};
+        glBindVertexArray(nr.vao);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nr.ibo);
+        glUseProgram(nr.shader);
+        new_renderer_update_projection(&nr, screen_size);
+        while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
+                .arena = rne_get_arena(),
+                .vertex_buffer = nr.vertex_buffer,
+                .vertex_capacity = sp_arrlen(nr.vertex_buffer),
+                .index_buffer = nr.index_buffer,
+                .index_capacity = sp_arrlen(nr.index_buffer),
+            }, &state)).render_cmds != NULL) {
+            new_renderer_update_buffers(&nr, batch.vertex_count, batch.index_count);
+            u32 count = 0;
+            for (RNE_RenderCmd* cmd = batch.render_cmds; cmd != NULL; cmd = cmd->next) {
+                glScissor(cmd->scissor.pos.x, cmd->scissor.pos.y, cmd->scissor.size.x, cmd->scissor.size.y);
+                glDrawElements(GL_TRIANGLES, cmd->index_count, GL_UNSIGNED_SHORT, (const void*) (u64) cmd->start_offset_bytes);
+                count++;
             }
+            sp_debug("Count: %d", count);
         }
-        renderer_end(&renderer);
 
         glfwSwapBuffers(window);
     }
@@ -497,6 +512,7 @@ i32 main(void) {
 
     // Shutdown
     font_destroy(font);
+    new_renderer_destroy(&nr);
     renderer_destroy(&renderer);
     glfwTerminate();
     sp_terminate();

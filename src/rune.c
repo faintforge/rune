@@ -644,7 +644,7 @@ LIST_STYLE_STACKS
 LIST_STYLE_STACKS
 #undef X
 
-// Drawing API
+// -- Drawing ------------------------------------------------------------------
 
 RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena) {
     return (RNE_DrawCmdBuffer) {
@@ -698,4 +698,413 @@ void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor) {
             .type = RNE_DRAW_CMD_TYPE_SCISSOR,
             .data.scissor = scissor,
         });
+}
+
+// -- Tessellation -------------------------------------------------------------
+
+#define PI 3.14159265358979323846
+
+typedef struct Path Path;
+struct Path {
+    RNE_Vertex* points;
+    u32 point_i;
+};
+
+static void push_point(Path* path, RNE_Vertex point) {
+    path->points[path->point_i] = point;
+    path->point_i++;
+}
+
+static void push_line(Path* path, RNE_DrawLine line) {
+    push_point(path, (RNE_Vertex) {
+            .pos = line.a,
+            .color = line.color,
+            .uv = sp_v2s(0.0f),
+        });
+    push_point(path, (RNE_Vertex) {
+            .pos = line.b,
+            .color = line.color,
+            .uv = sp_v2s(1.0f),
+        });
+}
+
+static void push_arc(Path* path, RNE_DrawArc arc) {
+    arc.start_angle = -arc.start_angle;
+    arc.end_angle = -arc.end_angle;
+
+    // https://en.wikipedia.org/wiki/List_of_trigonometric_identities#Angle_sum_and_difference_identities
+    // sin(a + b) = sin(a)*cos(b) + cos(a)*sin(b)
+    // cos(a + b) = cos(a)*cos(b) - sin(a)*sin(b)
+    f32 sina = sinf(arc.start_angle);
+    f32 cosa = cosf(arc.start_angle);
+    f32 b = (arc.end_angle - arc.start_angle) / arc.segments;
+    f32 sinb = sinf(b);
+    f32 cosb = cosf(b);
+
+    f32 current_sin = sina;
+    f32 current_cos = cosa;
+
+    for (u32 i = 0; i <= arc.segments; i++) {
+        push_point(path, (RNE_Vertex) {
+                .pos = sp_v2_add(arc.pos, sp_v2_muls(sp_v2(current_cos, current_sin), arc.radius)),
+                .uv = sp_v2(current_cos, current_sin),
+                .color = arc.color,
+            });
+
+        f32 new_sin = current_sin * cosb + current_cos * sinb;
+        f32 new_cos = current_cos * cosb - current_sin * sinb;
+        current_sin = new_sin;
+        current_cos = new_cos;
+    }
+}
+
+static void push_circle(Path* path, RNE_DrawCircle circle) {
+    push_arc(path, (RNE_DrawArc) {
+            .pos = circle.pos,
+            .radius = circle.radius,
+            .start_angle = 0.0f,
+            .end_angle = PI * 2.0f,
+            .color = circle.color,
+            .segments = circle.segments,
+        });
+}
+
+static void push_rect(Path* path, RNE_DrawRect rect) {
+    f32 min_side = sp_min(rect.size.x, rect.size.y) / 2.0f;
+    rect.corner_radius = sp_clamp(rect.corner_radius, 0.0f, min_side);
+
+    // TODO: UVs
+    if (rect.corner_radius == 0.0f) {
+        // Top left
+        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x, rect.pos.y), .color = rect.color });
+        // Bottom left
+        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x, rect.pos.y + rect.size.y), .color = rect.color });
+        // Bottom right
+        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y), .color = rect.color });
+        // Top right
+        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y), .color = rect.color });
+        return;
+    }
+
+    f32 inner_left   = rect.pos.x + rect.corner_radius;
+    f32 inner_right  = rect.pos.x + rect.size.x - rect.corner_radius;
+    f32 inner_bottom = rect.pos.y + rect.size.y - rect.corner_radius;
+    f32 inner_top    = rect.pos.y + rect.corner_radius;
+
+    // Top left
+    push_arc(path, (RNE_DrawArc) {
+            .pos = sp_v2(inner_left, inner_top),
+            .radius = rect.corner_radius,
+            .start_angle = PI / 2.0f,
+            .end_angle = PI,
+            .color = rect.color,
+            .segments = rect.corner_segments,
+        });
+    // Bottom left
+    push_arc(path, (RNE_DrawArc) {
+            .pos = sp_v2(inner_left, inner_bottom),
+            .radius = rect.corner_radius,
+            .start_angle = PI,
+            .end_angle = 3.0f * PI / 2.0f,
+            .color = rect.color,
+            .segments = rect.corner_segments,
+        });
+    // Bottom right
+    push_arc(path, (RNE_DrawArc) {
+            .pos = sp_v2(inner_right, inner_bottom),
+            .radius = rect.corner_radius,
+            .start_angle = -PI / 2.0f,
+            .end_angle = 0.0f,
+            .color = rect.color,
+            .segments = rect.corner_segments,
+        });
+    // Top right
+    push_arc(path, (RNE_DrawArc) {
+            .pos = sp_v2(inner_right, inner_top),
+            .radius = rect.corner_radius,
+            .start_angle = 0.0f,
+            .end_angle = PI / 2.0f,
+            .color = rect.color,
+            .segments = rect.corner_segments,
+        });
+}
+
+typedef struct FattenConfig FattenConfig;
+struct FattenConfig {
+    RNE_Vertex* vertex_buffer;
+    u16* index_buffer;
+
+    u32 vertex_capacity;
+    u32 index_capacity;
+
+    u32 vertex_end;
+    u32 index_end;
+};
+
+typedef struct FattenResult FattenResult;
+struct FattenResult {
+    u32 vertex_count;
+    u32 index_count;
+    b8 out_of_memory;
+};
+
+static FattenResult path_fill_convex(const Path* path, FattenConfig config) {
+    sp_assert(path != NULL, "Path can't be NULL.");
+    sp_assert(config.vertex_buffer != NULL, "Vertex buffer can't be NULL.");
+    sp_assert(config.index_buffer != NULL, "Index buffer can't be NULL.");
+
+    if (path->point_i < 3) {
+        return (FattenResult) {0};
+    }
+
+    u32 needed_vertices = path->point_i;
+    u32 needed_indices = (path->point_i - 2) * 3;
+
+    sp_assert(config.vertex_capacity - config.vertex_end >= needed_vertices, "Too many vertices for buffer!");
+    sp_assert(config.index_capacity - config.index_end >= needed_indices, "Too many indices for buffer!");
+
+    u32 start_offset = config.vertex_end;
+    u32 point_count = path->point_i;
+    for (u32 i = 0; i < point_count; i++) {
+        config.vertex_buffer[start_offset + i] = path->points[i];
+    }
+
+    u32 index_i = config.index_end;
+    for (u32 i = 1; i < point_count - 1; i++) {
+        config.index_buffer[index_i + 0] = start_offset;
+        config.index_buffer[index_i + 1] = start_offset + i;
+        config.index_buffer[index_i + 2] = start_offset + i + 1;
+        index_i += 3;
+    }
+
+    return (FattenResult) {
+        .vertex_count = needed_vertices,
+        .index_count = needed_indices,
+    };
+}
+
+static FattenResult path_stroke(const Path* path, FattenConfig config, f32 thickness, b8 closed) {
+    sp_assert(path != NULL, "Path can't be NULL.");
+    sp_assert(config.vertex_buffer != NULL, "Vertex buffer can't be NULL.");
+    sp_assert(config.index_buffer != NULL, "Index buffer can't be NULL.");
+
+    // TODO: UVs
+
+    if (path->point_i < 2 || (path->point_i < 3 && closed)) {
+        return (FattenResult) {0};
+    }
+
+    u32 needed_vertices = path->point_i * 2;
+    u32 needed_indices = closed ? path->point_i * 6 : (path->point_i - 1) * 6;
+
+    sp_assert(config.vertex_capacity - config.vertex_end >= needed_vertices, "Too many vertices for buffer!");
+    sp_assert(config.index_capacity - config.index_end >= needed_indices, "Too many indices for buffer!");
+
+    u32 point_count = path->point_i;
+    u32 start_offset = config.vertex_end;
+    for (u32 i = 0; i < point_count; i++) {
+        SP_Vec2 offset;
+        SP_Vec2 curr = path->points[i].pos;
+
+        if (!closed && (i == 0 || i + 1 == point_count)) {
+            SP_Vec2 normal;
+            if (i == 0) {
+                SP_Vec2 next = path->points[i + 1].pos;
+                normal = sp_v2_sub(next, curr);
+            } else {
+                SP_Vec2 prev = path->points[i - 1].pos;
+                normal = sp_v2_sub(curr, prev);
+            }
+            normal = sp_v2_normalized(normal);
+            normal = sp_v2(-normal.y, normal.x);
+
+            offset = sp_v2_muls(normal, thickness / 2.0f);
+        } else {
+            u32 i_prev = (point_count + i - 1) % point_count;
+            u32 i_next = (i + 1) % point_count;
+
+            SP_Vec2 prev = path->points[i_prev].pos;
+            SP_Vec2 next = path->points[i_next].pos;
+
+            // Calculate edge normals
+            SP_Vec2 norm1 = sp_v2_sub(curr, prev);
+            SP_Vec2 norm2 = sp_v2_sub(next, curr);
+            norm1 = sp_v2_normalized(norm1);
+            norm2 = sp_v2_normalized(norm2);
+            // Rotate 90-degrees to get normal
+            norm1 = sp_v2(-norm1.y, norm1.x);
+            norm2 = sp_v2(-norm2.y, norm2.x);
+
+            // Honestly, I have no clue what's happening here.
+            // It's taken from the Nuklear function
+            // 'nk_draw_list_stroke_poly_line'.
+            SP_Vec2 avg = sp_v2_divs(sp_v2_add(norm1, norm2), 2.0f);
+            if (sp_v2_magnitude_squared(avg) > 0.000001f) {
+                f32 scale = 1.0f / sp_v2_magnitude_squared(avg);
+                scale = sp_min(scale, 100.0f);
+                scale *= thickness / 2.0f;
+                avg = sp_v2_muls(avg, scale);
+            }
+            offset = avg;
+        }
+
+        config.vertex_buffer[start_offset + i * 2 + 0] = (RNE_Vertex) {
+            .pos = curr,
+            .color = path->points[i].color,
+        };
+        config.vertex_buffer[start_offset + i * 2 + 1] = (RNE_Vertex) {
+            .pos = sp_v2_sub(curr, sp_v2_muls(offset, 2.0f)),
+            .color = path->points[i].color,
+        };
+    }
+
+    u32 edge_count = point_count;
+    if (!closed) {
+        edge_count--;
+    }
+
+    u32 index_i = config.index_end;
+    for (u32 i = 0; i < edge_count; i++) {
+        u32 i_next = (i + 1) % point_count;
+
+        u32 v0 = start_offset + i * 2;
+        u32 v1 = start_offset + i * 2 + 1;
+        u32 v2 = start_offset + i_next * 2;
+        u32 v3 = start_offset + i_next * 2 + 1;
+
+        config.index_buffer[index_i + 0] = v0;
+        config.index_buffer[index_i + 1] = v1;
+        config.index_buffer[index_i + 2] = v2;
+
+        config.index_buffer[index_i + 3] = v2;
+        config.index_buffer[index_i + 4] = v3;
+        config.index_buffer[index_i + 5] = v1;
+
+        index_i += 6;
+    }
+
+    return (FattenResult) {
+        .vertex_count = needed_vertices,
+        .index_count = needed_indices,
+    };
+}
+
+// Resets path after use.
+static FattenResult path_fatten(Path* path, FattenConfig config, const RNE_DrawCmd* cmd) {
+    FattenResult result = {0};
+    if (cmd->filled) {
+        result = path_fill_convex(path, config);
+    } else {
+        result = path_stroke(path, config, cmd->thickness, cmd->closed);
+    }
+    path->point_i = 0;
+    return result;
+}
+
+RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
+        RNE_TessellationConfig config,
+        RNE_TessellationState* state) {
+    // Build shape
+    // Check if vbuff and ibuff has capacity for it
+    // If not, return current batch
+
+    // TODO: Text rendering
+
+    if (!state->not_first_call) {
+        state->not_first_call = true;
+        state->current_cmd = buffer->first;
+        state->current_scissor = (RNE_DrawScissor) {
+            .pos = sp_v2s(-(1<<13)),
+            .size = sp_v2s(1<<14),
+        };
+    }
+
+    RNE_RenderCmd* first = NULL;
+    RNE_RenderCmd* last = NULL;
+
+    u32 vertex_end = 0;
+    u32 index_end = 0;
+    u32 index_count = 0;
+
+    SP_Scratch scratch = sp_scratch_begin(&config.arena, 1);
+    RNE_Vertex* points = sp_arena_push_no_zero(scratch.arena, sizeof(RNE_Vertex) * config.vertex_capacity);
+    Path path = {
+        .points = points,
+    };
+
+    for (; state->current_cmd != NULL; state->current_cmd = state->current_cmd->next) {
+        RNE_DrawCmd* cmd = state->current_cmd;
+        switch (cmd->type) {
+            case RNE_DRAW_CMD_TYPE_LINE: {
+                push_line(&path, cmd->data.line);
+            } break;
+            case RNE_DRAW_CMD_TYPE_ARC:
+                push_arc(&path, cmd->data.arc);
+                break;
+            case RNE_DRAW_CMD_TYPE_CIRCLE:
+                push_circle(&path, cmd->data.circle);
+                break;
+            case RNE_DRAW_CMD_TYPE_RECT:
+                push_rect(&path, cmd->data.rect);
+                break;
+            case RNE_DRAW_CMD_TYPE_TEXT:
+                break;
+            case RNE_DRAW_CMD_TYPE_SCISSOR: {
+                RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(config.arena, sizeof(RNE_RenderCmd));
+                *render_cmd = (RNE_RenderCmd) {
+                    .start_offset_bytes = (index_end - index_count) * sizeof(u16),
+                    .index_count = index_count,
+                    .scissor = cmd->data.scissor,
+                };
+                sp_sll_queue_push(first, last, render_cmd);
+            } break;
+        }
+
+        FattenResult result = path_fatten(&path, (FattenConfig) {
+                .vertex_buffer = config.vertex_buffer,
+                .index_buffer = config.index_buffer,
+
+                .vertex_end = vertex_end,
+                .index_end = index_end,
+
+                .vertex_capacity = config.vertex_capacity,
+                .index_capacity = config.index_capacity,
+            }, cmd);
+
+        if (result.out_of_memory) {
+            RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(config.arena, sizeof(RNE_RenderCmd));
+            *render_cmd = (RNE_RenderCmd) {
+                .start_offset_bytes = (index_end - index_count) * sizeof(u16),
+                    .index_count = index_count,
+                    .scissor = state->current_scissor,
+            };
+            sp_sll_queue_push(first, last, render_cmd);
+            index_count = 0;
+            break;
+        }
+
+        vertex_end += result.vertex_count;
+        index_end += result.index_count;
+        index_count += result.index_count;
+    }
+    sp_scratch_end(scratch);
+
+    if (state->current_cmd == NULL && !state->finished) {
+        RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(config.arena, sizeof(RNE_RenderCmd));
+        *render_cmd = (RNE_RenderCmd) {
+            .start_offset_bytes = (index_end - index_count) * sizeof(u16),
+                .index_count = index_count,
+                .scissor = state->current_scissor,
+        };
+        sp_sll_queue_push(first, last, render_cmd);
+        index_count = 0;
+        state->finished = true;
+    }
+
+    RNE_BatchCmd batch_cmd = {
+        .index_count = index_end,
+        .vertex_count = vertex_end,
+        .render_cmds = first,
+    };
+    return batch_cmd;
 }

@@ -1,7 +1,87 @@
 #pragma once
 
 #include "spire.h"
-#include "renderer.h"
+#include "font.h"
+
+// Drawing API
+typedef union RNE_Handle RNE_Handle;
+union RNE_Handle {
+    void* ptr;
+    u64 id;
+};
+
+typedef enum RNE_DrawCmdType {
+    RNE_DRAW_CMD_TYPE_RECT,
+    RNE_DRAW_CMD_TYPE_LINE,
+    RNE_DRAW_CMD_TYPE_TEXT,
+    RNE_DRAW_CMD_TYPE_SCISSOR,
+} RNE_DrawCmdType;
+
+typedef struct RNE_DrawRect RNE_DrawRect;
+struct RNE_DrawRect {
+    SP_Vec2 pos;
+    SP_Vec2 size;
+    f32 corner_radius;
+    u32 corner_segments;
+    SP_Color color;
+};
+
+typedef struct RNE_DrawText RNE_DrawText;
+struct RNE_DrawText {
+    SP_Str text;
+    SP_Vec2 pos;
+    SP_Color color;
+    RNE_Handle font_handle;
+    f32 font_size;
+};
+
+typedef struct RNE_DrawScissor RNE_DrawScissor;
+struct RNE_DrawScissor {
+    SP_Vec2 pos;
+    SP_Vec2 size;
+};
+
+typedef struct RNE_DrawLine RNE_DrawLine;
+struct RNE_DrawLine {
+    SP_Vec2 a;
+    SP_Vec2 b;
+    SP_Color color;
+    f32 thickness;
+};
+
+typedef struct RNE_DrawCmd RNE_DrawCmd;
+struct RNE_DrawCmd {
+    RNE_DrawCmd* next;
+
+    RNE_DrawCmdType type;
+    f32 thickness;
+    b8 stroke;
+    b8 filled;
+    b8 closed;
+    union {
+        RNE_DrawRect rect;
+        RNE_DrawLine line;
+        RNE_DrawText text;
+        RNE_DrawScissor scissor;
+    } data;
+};
+
+typedef struct RNE_DrawCmdBuffer RNE_DrawCmdBuffer;
+struct RNE_DrawCmdBuffer {
+    SP_Arena* arena;
+    RNE_DrawCmd* first;
+    RNE_DrawCmd* last;
+};
+
+extern RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena);
+extern void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd);
+
+extern void rne_draw_rect_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect);
+extern void rne_draw_rect_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect, f32 thickness);
+extern void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line);
+extern void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text);
+extern void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor);
+
 
 typedef enum RNE_WidgetFlags {
     RNE_WIDGET_FLAG_NONE            = 0,
@@ -50,7 +130,7 @@ typedef enum RNE_TextAlign {
 
 typedef struct RNE_Widget RNE_Widget;
 
-typedef void (*RNE_WidgetRenderFunc)(RNE_Widget* widget, Renderer* renderer, void* userdata);
+typedef void (*RNE_WidgetRenderFunc)(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata);
 
 struct RNE_Widget {
     RNE_Widget* parent;
@@ -82,8 +162,8 @@ struct RNE_Widget {
     void* render_userdata;
 
     // Style
-    SP_Vec4 bg;
-    SP_Vec4 fg;
+    SP_Color bg;
+    SP_Color fg;
     Font* font;
     u32 font_size;
     RNE_Axis flow;
@@ -93,8 +173,8 @@ struct RNE_Widget {
 typedef struct RNE_StyleStack RNE_StyleStack;
 struct RNE_StyleStack {
     RNE_Size size[RNE_AXIS_COUNT];
-    SP_Vec4 bg;
-    SP_Vec4 fg;
+    SP_Color bg;
+    SP_Color fg;
     Font* font;
     u32 font_size;
     RNE_Axis flow;
@@ -132,7 +212,7 @@ struct RNE_Signal {
 extern void rne_init(RNE_StyleStack default_style_stack);
 extern void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse);
 extern void rne_end(void);
-extern void rne_draw(Renderer* renderer);
+extern RNE_DrawCmdBuffer rne_draw(SP_Arena* arena);
 
 extern SP_Arena* rne_get_arena(void);
 extern RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags);
@@ -166,8 +246,8 @@ extern RNE_Signal rne_signal(RNE_Widget* widget);
 // Stack operations
 extern void rne_push_width(RNE_Size value);
 extern void rne_push_height(RNE_Size value);
-extern void rne_push_bg(SP_Vec4 value);
-extern void rne_push_fg(SP_Vec4 value);
+extern void rne_push_bg(SP_Color value);
+extern void rne_push_fg(SP_Color value);
 extern void rne_push_font(Font* value);
 extern void rne_push_font_size(u32 value);
 extern void rne_push_flow(RNE_Axis value);
@@ -178,8 +258,8 @@ extern void rne_push_text_align(RNE_TextAlign value);
 
 extern RNE_Size rne_pop_width(void);
 extern RNE_Size rne_pop_height(void);
-extern SP_Vec4 rne_pop_bg(void);
-extern SP_Vec4 rne_pop_fg(void);
+extern SP_Color rne_pop_bg(void);
+extern SP_Color rne_pop_fg(void);
 extern Font* rne_pop_font(void);
 extern u32 rne_pop_font_size(void);
 extern RNE_Axis rne_pop_flow(void);
@@ -190,8 +270,8 @@ extern RNE_TextAlign rne_pop_text_align(void);
 
 extern void rne_next_width(RNE_Size value);
 extern void rne_next_height(RNE_Size value);
-extern void rne_next_bg(SP_Vec4 value);
-extern void rne_next_fg(SP_Vec4 value);
+extern void rne_next_bg(SP_Color value);
+extern void rne_next_fg(SP_Color value);
 extern void rne_next_font(Font* value);
 extern void rne_next_font_size(u32 value);
 extern void rne_next_flow(RNE_Axis value);
@@ -202,8 +282,8 @@ extern void rne_next_text_align(RNE_TextAlign value);
 
 extern RNE_Size rne_top_width(void);
 extern RNE_Size rne_top_height(void);
-extern SP_Vec4 rne_top_bg(void);
-extern SP_Vec4 rne_top_fg(void);
+extern SP_Color rne_top_bg(void);
+extern SP_Color rne_top_fg(void);
 extern Font* rne_top_font(void);
 extern u32 rne_top_font_size(void);
 extern RNE_Axis rne_top_flow(void);

@@ -12,8 +12,8 @@
 #define LIST_STYLE_STACKS \
     X(Width, width, RNE_Size) \
     X(Height, height, RNE_Size) \
-    X(Bg, bg, SP_Vec4) \
-    X(Fg, fg, SP_Vec4) \
+    X(Bg, bg, SP_Color) \
+    X(Fg, fg, SP_Color) \
     X(Font, font, Font*) \
     X(FontSize, font_size, u32) \
     X(Flow, flow, RNE_Axis) \
@@ -344,17 +344,14 @@ void rne_end(void) {
     }
 }
 
-static void rne_draw_helper(Renderer* renderer, RNE_Widget* widget) {
+static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     if (widget == NULL) {
         return;
     }
 
     b8 reset_scissor = false;
-    Scissor last_scissor = renderer->scissor;
     if (widget->flags & RNE_WIDGET_FLAG_CLIP) {
-        renderer_end(renderer);
-        renderer_begin(renderer, renderer->screen_size);
-        renderer_scissor(renderer, (Scissor) {
+        rne_draw_scissor(buffer, (RNE_DrawScissor) {
                 .pos = widget->computed_absolute_position,
                 .size = widget->computed_size,
             });
@@ -362,7 +359,7 @@ static void rne_draw_helper(Renderer* renderer, RNE_Widget* widget) {
     }
 
     if (widget->flags & RNE_WIDGET_FLAG_DRAW_BACKGROUND) {
-        renderer_draw(renderer, (RenderBox) {
+        rne_draw_rect_filled(buffer, (RNE_DrawRect) {
                 .pos = widget->computed_absolute_position,
                 .size = widget->computed_size,
                 .color = widget->bg,
@@ -393,30 +390,36 @@ static void rne_draw_helper(Renderer* renderer, RNE_Widget* widget) {
         pos.y += widget->computed_size.y / 2.0f;
         pos.y -= (metrics.ascent - metrics.descent) / 2.0f;
 
-        renderer_draw_text(renderer,
-                pos,
-                widget->text,
-                widget->font,
-                widget->fg);
+        rne_draw_text(buffer, (RNE_DrawText) {
+                .pos = pos,
+                .text = widget->text,
+                .font_handle = widget->font,
+                .font_size = widget->font_size,
+                .color = widget->fg,
+            });
     }
 
     if (widget->render_func != NULL) {
-        widget->render_func(widget, renderer, widget->render_userdata);
+        widget->render_func(buffer, widget, widget->render_userdata);
     }
 
     // Depth-first
-    rne_draw_helper(renderer, widget->child_first);
+    rne_draw_helper(buffer, widget->child_first);
 
     if (reset_scissor) {
-        renderer_end(renderer);
-        renderer_begin(renderer, renderer->screen_size);
-        renderer_scissor(renderer, last_scissor);
+        rne_draw_scissor(buffer, (RNE_DrawScissor) {
+                .pos = sp_v2s(-(1<<16)),
+                .size = sp_v2s(1<<16),
+            });
     }
-    rne_draw_helper(renderer, widget->next);
+    rne_draw_helper(buffer, widget->next);
 }
 
-void rne_draw(Renderer* renderer) {
-    rne_draw_helper(renderer, &ctx.container);
+RNE_DrawCmdBuffer rne_draw(SP_Arena* arena) {
+    RNE_DrawCmdBuffer buffer = rne_draw_buffer_begin(arena);
+
+    rne_draw_helper(&buffer, &ctx.container);
+    return buffer;
 }
 
 SP_Arena* rne_get_arena(void) {
@@ -644,3 +647,59 @@ LIST_STYLE_STACKS
     }
 LIST_STYLE_STACKS
 #undef X
+
+// Drawing API
+
+RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena) {
+    return (RNE_DrawCmdBuffer) {
+        .arena = arena,
+    };
+}
+
+void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd) {
+    RNE_DrawCmd* cmd_copy = sp_arena_push_no_zero(buffer->arena, sizeof(RNE_DrawCmd));
+    *cmd_copy = cmd;
+    sp_sll_queue_push(buffer->first, buffer->last, cmd_copy);
+}
+
+void rne_draw_rect_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_RECT,
+            .filled = true,
+            .data.rect = rect,
+        });
+}
+
+void rne_draw_rect_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect, f32 thickness) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_RECT,
+            .filled = false,
+            .closed = true,
+            .thickness = thickness,
+            .data.rect = rect,
+        });
+}
+
+void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_LINE,
+            .filled = false,
+            .closed = false,
+            .thickness = line.thickness,
+            .data.line = line,
+        });
+}
+
+void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_TEXT,
+            .data.text = text,
+        });
+}
+
+void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_SCISSOR,
+            .data.scissor = scissor,
+        });
+}

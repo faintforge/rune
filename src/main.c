@@ -3,6 +3,7 @@
 #include "font.h"
 #include "rune.h"
 
+#include <assert.h>
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
@@ -95,7 +96,7 @@ static RNE_Widget* text(SP_Str text) {
     return rne_widget(text, RNE_WIDGET_FLAG_DRAW_TEXT);
 }
 
-static void checkbox_render(RNE_Widget* widget, Renderer* renderer, void* userdata) {
+static void checkbox_render(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata) {
     b8 value = *(b8*) userdata;
     if (!value) {
         return;
@@ -109,17 +110,17 @@ static void checkbox_render(RNE_Widget* widget, Renderer* renderer, void* userda
     SP_Vec2 pos = widget->computed_absolute_position;
     pos = sp_v2_add(pos, sp_v2_divs(sp_v2_sub(widget->computed_size, size), 2.0f));
 
-    renderer_draw(renderer, (RenderBox) {
+    rne_draw_rect_filled(buffer, (RNE_DrawRect) {
             .pos = pos,
             .size = size,
-            .color = sp_v4(0.75f, 0.75f, 0.75f, 1.0f),
+            .color = sp_color_rgba_f(0.75f, 0.75f, 0.75f, 1.0f),
         });
 }
 
 static RNE_Widget* checkbox(SP_Str id, b8* value) {
     rne_next_width(RNE_SIZE_PIXELS(32.0f, 1.0f));
     rne_next_height(RNE_SIZE_PIXELS(32.0f, 1.0f));
-    rne_next_bg(sp_v4(0.2f, 0.2f, 0.2f, 1.0f));
+    rne_next_bg(sp_color_rgba_f(0.2f, 0.2f, 0.2f, 1.0f));
     RNE_Widget* checkbox = rne_widget(id, RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_INTERACTIVE);
     rne_widget_equip_render_func(checkbox, checkbox_render, value);
 
@@ -135,7 +136,7 @@ typedef struct Rect Rect;
 struct Rect {
     SP_Vec2 pos;
     SP_Vec2 size;
-    SP_Vec4 color;
+    SP_Color color;
 };
 
 typedef union SliderData SliderData;
@@ -147,10 +148,10 @@ union SliderData {
     Rect r[2];
 };
 
-static void slider_render(RNE_Widget* widget, Renderer* renderer, void* userdata) {
+static void slider_render(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata) {
     SliderData* data = userdata;
     for (u8 i = 0; i < sp_arrlen(data->r); i++) {
-        renderer_draw(renderer, (RenderBox) {
+        rne_draw_rect_filled(buffer, (RNE_DrawRect) {
                 .pos = data->r[i].pos,
                 .size = data->r[i].size,
                 .color = data->r[i].color,
@@ -163,7 +164,7 @@ static RNE_Widget* slider(SP_Str id, f32* value, f32 min, f32 max) {
 
     rne_next_width(RNE_SIZE_PIXELS(128.0f, 1.0));
     rne_next_height(RNE_SIZE_PIXELS(16.0f, 1.0));
-    rne_next_bg(sp_v4s(0.3f));
+    rne_next_bg(sp_color_rgba_f(0.3f, 0.3f, 0.3f, 0.3f));
     RNE_Widget* widget = rne_widget(sp_str_pushf(arena, "%.*s-container", id.len, id.data),
             RNE_WIDGET_FLAG_NONE);
 
@@ -181,7 +182,7 @@ static RNE_Widget* slider(SP_Str id, f32* value, f32 min, f32 max) {
     bar.pos.x += nob.size.x / 2.0f;
     bar.pos.y += widget_size.y / 2.0f;
     bar.pos.y -= bar.size.y / 2.0f;
-    bar.color = sp_v4(0.3f, 0.3f, 0.3f, 1.0f);
+    bar.color = sp_color_rgba_f(0.3f, 0.3f, 0.3f, 1.0f);
 
     // Nob
     nob.pos = widget_pos;
@@ -190,13 +191,13 @@ static RNE_Widget* slider(SP_Str id, f32* value, f32 min, f32 max) {
     // Fill
     Rect fill = bar;
     fill.size.x = nob.pos.x - bar.pos.x + nob.size.x / 2.0f;
-    fill.color = sp_v4(0.75f, 0.75f, 0.75f, 1.0f);
+    fill.color = sp_color_rgba_f(0.75f, 0.75f, 0.75f, 1.0f);
 
     rne_next_width(RNE_SIZE_PIXELS(nob.size.x, 1.0f));
     rne_next_height(RNE_SIZE_PIXELS(nob.size.y, 1.0f));
     rne_next_fixed_x(nob.pos.x);
     rne_next_fixed_y(nob.pos.y);
-    rne_next_bg(sp_v4(1.0f, 1.0f, 1.0f, 1.0f));
+    rne_next_bg(sp_color_rgba_f(1.0f, 1.0f, 1.0f, 1.0f));
     RNE_Widget* nob_widget = rne_widget(sp_str_pushf(arena, "%.*s-nob", id.len, id.data),
             RNE_WIDGET_FLAG_DRAW_BACKGROUND |
             RNE_WIDGET_FLAG_FLOATING |
@@ -263,8 +264,8 @@ i32 main(void) {
                     .strictness = 1.0f,
                 },
             },
-            .fg = sp_v4s(1.0f),
-            .bg = sp_v4s(1.0f),
+            .fg = SP_COLOR_WHITE,
+            .bg = SP_COLOR_WHITE,
             .font = font,
             .font_size = 24,
             .flow = RNE_AXIS_VERTICAL,
@@ -302,9 +303,10 @@ i32 main(void) {
 
         // Build RNE_
         rne_begin(screen_size, mouse);
+        SP_Arena* frame_arena = rne_get_arena();
 
         // Top bar
-        rne_next_bg(sp_v4(0.1f, 0.1f, 0.1f, 1.0f));
+        rne_next_bg(sp_color_rgba_f(0.1f, 0.1f, 0.1f, 1.0f));
         rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
         rne_next_height(RNE_SIZE_CHILDREN(1.0f));
         rne_next_flow(RNE_AXIS_HORIZONTAL);
@@ -317,15 +319,15 @@ i32 main(void) {
 
                 rne_next_width(RNE_SIZE_PIXELS(rne_top_font_size() * 6.0f, 1.0f));
                 rne_next_height(RNE_SIZE_PIXELS(rne_top_font_size() * 2.0f, 1.0f));
-                rne_next_bg(sp_v4(0.75f, 0.2f, 0.2f, 1.0));
+                rne_next_bg(sp_color_rgba_f(0.75f, 0.2f, 0.2f, 1.0));
                 rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
                 RNE_Widget* button = rne_widget(sp_str_lit("Show Window"), RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_DRAW_TEXT | RNE_WIDGET_FLAG_INTERACTIVE);
                 RNE_Signal signal = rne_signal(button);
                 if (signal.hovered) {
-                    button->bg = sp_v4(0.5f, 0.2f, 0.2f, 1.0);
+                    button->bg = sp_color_rgba_f(0.5f, 0.2f, 0.2f, 1.0);
                 }
                 if (signal.pressed) {
-                    button->bg = sp_v4(0.2f, 0.2f, 0.5f, 1.0);
+                    button->bg = sp_color_rgba_f(0.2f, 0.2f, 0.5f, 1.0);
                 }
                 if (signal.clicked) {
                     show_window = true;
@@ -335,14 +337,14 @@ i32 main(void) {
 
                 row() {
                     text(sp_str_lit("Window toggle: "));
-                    checkbox(sp_str_pushf(arena, "checkbock%p", &show_window), &show_window);
+                    checkbox(sp_str_pushf(frame_arena, "checkbock%p", &show_window), &show_window);
                 }
 
                 spacer(RNE_SIZE_PIXELS(8.0f, 1.0));
 
                 row() {
                     static f32 value = 0.0f;
-                    text(sp_str_pushf(arena, "Slider: ", value));
+                    text(sp_str_pushf(frame_arena, "Slider: ", value));
                     slider(sp_str_lit("slidervalue"), &value, 5.0f, 10.0f);
                 }
 
@@ -371,7 +373,7 @@ i32 main(void) {
 
         // Draggable window
         if (show_window) {
-            rne_next_bg(sp_v4(0.2f, 0.2f, 0.3f, 1.0f));
+            rne_next_bg(sp_color_rgba_f(0.2f, 0.2f, 0.3f, 1.0f));
             rne_next_width(RNE_SIZE_PIXELS(128.0f, 1.0f));
             rne_next_height(RNE_SIZE_PIXELS(128.0f, 1.0f));
             rne_next_fixed_x(window_pos.x);
@@ -383,7 +385,7 @@ i32 main(void) {
                     RNE_WIDGET_FLAG_DRAW_TEXT);
             rne_push_parent(draggable);
             {
-                rne_next_bg(sp_v4(0.0f, 0.0f, 0.0f, 0.5f));
+                rne_next_bg(sp_color_rgba_f(0.0f, 0.0f, 0.0f, 0.5f));
                 rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
                 rne_next_height(RNE_SIZE_PIXELS(32.0f, 1.0f));
                 // rne_next_height(RNE_SIZE_CHILDREN(1.0f));
@@ -420,10 +422,10 @@ i32 main(void) {
                 rne_push_parent(content);
                 {
                     for (u32 i = 0; i < 32; i++) {
-                        rne_next_bg(sp_v4(1.0f / 32 * i, 0.3f, 0.3f, 1.0f));
+                        rne_next_bg(sp_color_rgba_f(1.0f / 32 * i, 0.3f, 0.3f, 1.0f));
                         rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
                         rne_next_height(RNE_SIZE_TEXT(1.0f));
-                        rne_widget(sp_str_pushf(arena, "%d", i), RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_DRAW_TEXT);
+                        rne_widget(sp_str_pushf(frame_arena, "%d", i), RNE_WIDGET_FLAG_DRAW_BACKGROUND | RNE_WIDGET_FLAG_DRAW_TEXT);
                     }
                 }
                 rne_pop_parent();
@@ -434,12 +436,38 @@ i32 main(void) {
         rne_end();
 
         // Render
+        RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
+
         glViewport(0.0f, 0.0f, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         renderer_begin(&renderer, screen_size);
-        rne_draw(&renderer);
+        for (RNE_DrawCmd* cmd = buffer.first; cmd != NULL; cmd = cmd->next) {
+            switch (cmd->type) {
+                case RNE_DRAW_CMD_TYPE_RECT:
+                    renderer_draw(&renderer, (RenderBox) {
+                            .pos = cmd->data.rect.pos,
+                            .size = cmd->data.rect.size,
+                            .color = cmd->data.rect.color,
+                        });
+                    break;
+                case RNE_DRAW_CMD_TYPE_TEXT:
+                    renderer_draw_text(&renderer, cmd->data.text.pos, cmd->data.text.text, cmd->data.text.font_handle.ptr, cmd->data.text.color);
+                    break;
+                case RNE_DRAW_CMD_TYPE_SCISSOR:
+                    renderer_end(&renderer);
+                    renderer_begin(&renderer, screen_size);
+                    renderer_scissor(&renderer, (Scissor) {
+                            .pos = cmd->data.scissor.pos,
+                            .size = cmd->data.scissor.size,
+                        });
+                    break;
+                default:
+                    sp_assert(false, "Unsupported drawing primitive!");
+                    break;
+            }
+        }
         renderer_end(&renderer);
 
         glfwSwapBuffers(window);

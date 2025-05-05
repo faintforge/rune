@@ -7,7 +7,7 @@ typedef struct Vertex Vertex;
 struct Vertex {
     SP_Vec2 pos;
     SP_Vec2 uv;
-    SP_Vec4 color;
+    SP_Color color;
     u32 texture_index;
 };
 
@@ -15,7 +15,7 @@ typedef struct RenderBox RenderBox;
 struct RenderBox {
     SP_Vec2 pos;
     SP_Vec2 size;
-    SP_Vec4 color;
+    SP_Color color;
     u32 texture;
     b8 has_uv;
     SP_Vec2 uv[2];
@@ -49,5 +49,5 @@ extern void renderer_destroy(Renderer* renderer);
 extern void renderer_begin(Renderer* renderer, SP_Ivec2 screen_size);
 extern void renderer_end(Renderer* renderer);
 extern void renderer_draw(Renderer* renderer, RenderBox box);
-extern void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font, SP_Vec4 color);
+extern void renderer_draw_text(Renderer* renderer, SP_Vec2 pos, SP_Str text, Font* font, SP_Color color);
 extern void renderer_scissor(Renderer* renderer, Scissor scissor);

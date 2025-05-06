@@ -1,10 +1,11 @@
-#include "new_renderer.h"
 #include "spire.h"
+#include "rune.h"
+#include "rune_tessellation.h"
+
+#include "new_renderer.h"
 #include "renderer.h"
 #include "font.h"
-#include "rune.h"
 
-#include <assert.h>
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 

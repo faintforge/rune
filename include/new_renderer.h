@@ -1,7 +1,7 @@
 #pragma once
 
 #include "spire.h"
-#include "rune.h"
+#include "rune_tessellation.h"
 
 typedef struct NewRenderer NewRenderer;
 struct NewRenderer {

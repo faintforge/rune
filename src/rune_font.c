@@ -1,29 +1,9 @@
-#include "font.h"
+#include "rune_font.h"
+#include "spire.h"
 
-#include <glad/gl.h>
 #include <stb_truetype.h>
 
 #include <string.h>
-#include <stdio.h>
-
-SP_Str read_file(SP_Arena* arena, SP_Str filename) {
-    const char* cstr_filename = sp_str_to_cstr(arena, filename);
-    FILE *fp = fopen(cstr_filename, "rb");
-    // Pop off the cstr_filename from the arena since it's no longer needed.
-    sp_arena_pop(arena, filename.len + 1);
-    if (fp == NULL) {
-        sp_error("Failed to open file '%.*s'.", filename.len, filename.data);
-        return (SP_Str) {0};
-    }
-
-    fseek(fp, 0, SEEK_END);
-    u32 len = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    u8* content = sp_arena_push(arena, len);
-    fread(content, sizeof(u8), len, fp);
-
-    return sp_str(content, len);
-}
 
 // -- Quadtree packer ----------------------------------------------------------
 
@@ -44,7 +24,7 @@ struct QuadtreeAtlas {
     u8* bitmap;
 };
 
-QuadtreeAtlas quadtree_atlas_init(SP_Arena* arena, SP_Ivec2 size) {
+static QuadtreeAtlas quadtree_atlas_init(SP_Arena* arena, SP_Ivec2 size) {
     QuadtreeAtlas atlas = {
         .arena = arena,
         .root = {
@@ -56,14 +36,14 @@ QuadtreeAtlas quadtree_atlas_init(SP_Arena* arena, SP_Ivec2 size) {
     return atlas;
 }
 
-u32 align_value_up(u32 value, u32 align) {
+static u32 align_value_up(u32 value, u32 align) {
     u64 aligned = value + align - 1;
     u64 mod = aligned % align;
     aligned = aligned - mod;
     return aligned;
 }
 
-QuadtreeAtlasNode* quadtree_atlas_insert_helper(SP_Arena* arena, QuadtreeAtlasNode* node, SP_Ivec2 size) {
+static QuadtreeAtlasNode* quadtree_atlas_insert_helper(SP_Arena* arena, QuadtreeAtlasNode* node, SP_Ivec2 size) {
     if (node == NULL || node->occupied || node->size.x < size.x || node->size.y < size.y) {
         return NULL;
     }
@@ -141,54 +121,11 @@ QuadtreeAtlasNode* quadtree_atlas_insert_helper(SP_Arena* arena, QuadtreeAtlasNo
     return NULL;
 }
 
-QuadtreeAtlasNode* quadtree_atlas_insert(QuadtreeAtlas* atlas, SP_Ivec2 size) {
+static QuadtreeAtlasNode* quadtree_atlas_insert(QuadtreeAtlas* atlas, SP_Ivec2 size) {
     size.x = align_value_up(size.x, 4);
     size.y = align_value_up(size.y, 4);
     return quadtree_atlas_insert_helper(atlas->arena, &atlas->root, size);
 }
-
-// void quadtree_atlas_debug_draw_helper(SP_Ivec2 atlas_size, QuadtreeAtlasNode* node, Quad quad, Camera cam) {
-//     if (node == NULL) {
-//         return;
-//     }
-//
-//     SP_Vec2 size = sp_v2(
-//             (f32) node->size.x / (f32) atlas_size.x,
-//             (f32) node->size.y / (f32) atlas_size.y
-//         );
-//     size = sp_v2_mul(size, quad.size);
-//
-//     SP_Vec2 pos = sp_v2(
-//             (f32) node->pos.x / (f32) atlas_size.x,
-//             -(f32) node->pos.y / (f32) atlas_size.y
-//         );
-//     pos = sp_v2_mul(pos, quad.size);
-//     pos = sp_v2_add(pos, quad.pos);
-//
-//     debug_draw_quad_outline((Quad) {
-//             .pos = pos,
-//             .size = size,
-//             .color = color_rgb_hex(0x808080),
-//             .pivot = sp_v2(-0.5f, 0.5f),
-//         }, cam);
-//
-//     if (node->split) {
-//         for (u8 i = 0; i < 4; i++) {
-//             quadtree_atlas_debug_draw_helper(atlas_size, &node->children[i], quad, cam);
-//         }
-//     }
-// }
-
-// void quadtree_atlas_debug_draw(QuadtreeAtlas atlas, Quad quad, Camera cam) {
-//     debug_draw_quad((Quad) {
-//             .pos = quad.pos,
-//             .size = quad.size,
-//             .pivot = sp_v2(-0.5f, 0.5f),
-//             .color = quad.color,
-//             .texture = quad.texture,
-//         }, cam);
-//     quadtree_atlas_debug_draw_helper(atlas.root.size, &atlas.root, quad, cam);
-// }
 
 // -- Font provider ------------------------------------------------------------
 
@@ -209,9 +146,9 @@ struct FontProvider {
     void* (*init)(SP_Arena* arena, SP_Str ttf_data);
     void (*terminate)(void* internal);
     u32 (*get_glyph_index)(void* internal, u32 codepoint);
-    FPGlyph (*get_glyph)(void* internal, SP_Arena* arena, u32 glyph_index, u32 size);
-    FontMetrics (*get_metrics)(void* internal, u32 size);
-    i32 (*get_kerning)(void* internal, u32 left_glyph, u32 right_glyph, u32 size);
+    FPGlyph (*get_glyph)(void* internal, SP_Arena* arena, u32 glyph_index, f32 size);
+    RNE_FontMetrics (*get_metrics)(void* internal, f32 size);
+    i32 (*get_kerning)(void* internal, u32 left_glyph, u32 right_glyph, f32 size);
 };
 
 // -- stb_truetype font provider -----------------------------------------------
@@ -242,7 +179,7 @@ static u32 fp_stbtt_get_glyph_index(void* internal, u32 codepoint) {
     return glyph_index;
 }
 
-static FPGlyph fp_stbtt_get_glyph(void* internal, SP_Arena* arena, u32 glyph_index, u32 size) {
+static FPGlyph fp_stbtt_get_glyph(void* internal, SP_Arena* arena, u32 glyph_index, f32 size) {
     STBTTInternal* stbtt = internal;
     i32 advance;
     i32 lsb;
@@ -270,21 +207,21 @@ static FPGlyph fp_stbtt_get_glyph(void* internal, SP_Arena* arena, u32 glyph_ind
     return glyph;
 }
 
-static FontMetrics fp_stbtt_get_metrics(void* internal, u32 size) {
+static RNE_FontMetrics fp_stbtt_get_metrics(void* internal, f32 size) {
     STBTTInternal* stbtt = internal;
     f32 scale = stbtt_ScaleForPixelHeight(&stbtt->info, size);
     i32 ascent;
     i32 descent;
     i32 linegap;
     stbtt_GetFontVMetrics(&stbtt->info, &ascent, &descent, &linegap);
-    return (FontMetrics) {
+    return (RNE_FontMetrics) {
         .ascent = floorf(ascent * scale),
         .descent = floorf(descent * scale),
         .linegap = floorf(linegap * scale),
     };
 }
 
-static i32 fp_stbtt_get_kerning(void* internal, u32 left_glyph, u32 right_glyph, u32 size) {
+static i32 fp_stbtt_get_kerning(void* internal, u32 left_glyph, u32 right_glyph, f32 size) {
     STBTTInternal* stbtt = internal;
     f32 scale = stbtt_ScaleForPixelHeight(&stbtt->info, size);
     f32 kern = stbtt_GetGlyphKernAdvance(&stbtt->info, left_glyph, right_glyph);
@@ -300,109 +237,86 @@ static const FontProvider STBTT_PROVIDER = {
     .get_kerning = fp_stbtt_get_kerning,
 };
 
-// -- Forward facing API -------------------------------------------------------
+// -- User API -----------------------------------------------------------------
 
-typedef struct GlyphInternal GlyphInternal;
-struct GlyphInternal {
-    Glyph user_glyph;
+typedef struct RNE_GlyphInternal RNE_GlyphInternal;
+struct RNE_GlyphInternal {
+    RNE_Glyph user_glyph;
     u8* bitmap;
     SP_Ivec2 bitmap_size;
 };
 
-typedef struct SizedFont SizedFont;
-struct SizedFont {
-    u32 size;
+typedef struct RNE_SizedFont RNE_SizedFont;
+struct RNE_SizedFont {
+    f32 size;
     QuadtreeAtlas atlas_packer;
-    u32 atlas_texture;
-    FontMetrics metrics;
+    RNE_UserData userdata_atlas;
     // Key: u32 (glyph index)
     // Value: GlyphInternal
     SP_HashMap* glyph_map;
 };
 
-struct Font {
+typedef struct RNE_Font RNE_Font;
+struct RNE_Font {
     SP_Arena* arena;
-    FontProvider provider;
+    RNE_FontCallbacks cb;
     SP_Str ttf_data;
+    FontProvider provider;
 
     void* internal;
-    u32 curr_size;
     // Key: f32 (size)
     // Value: RNE_SizedFont
     SP_HashMap* map;
 };
 
-SizedFont sized_font_create(Font* font, u32 size) {
+static RNE_SizedFont sized_font_create(RNE_Font* font, f32 size) {
     SP_Ivec2 atlas_size = sp_iv2(256, 256);
-    // Provide a buffer with zeros so the texture is properly cleared.
-    SP_Scratch scratch = sp_scratch_begin(NULL, 0);
-    u8* zero_buffer = sp_arena_push(scratch.arena, atlas_size.x * atlas_size.y);
-
-    u32 texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-
-    // Swizzle components
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_R, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_G, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_B, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_RED);
-
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D,
-            0,
-            GL_R8,
-            atlas_size.x,
-            atlas_size.y,
-            0,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            zero_buffer);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
-    SizedFont sized = {
+    RNE_SizedFont sized = {
         .size = size,
         .atlas_packer = quadtree_atlas_init(font->arena, atlas_size),
-        .atlas_texture = texture,
-        .metrics = font->provider.get_metrics(font->internal, size),
-        .glyph_map = sp_hm_new(sp_hm_desc_generic(font->arena, 32, u32, GlyphInternal)),
+        .userdata_atlas = font->cb.create(atlas_size),
+        .glyph_map = sp_hm_new(sp_hm_desc_generic(font->arena, 32, u32, RNE_GlyphInternal)),
     };
-    sp_scratch_end(scratch);
     return sized;
 }
 
-Font* font_create(SP_Arena* arena, SP_Str filename) {
-    Font* font = sp_arena_push_no_zero(arena, sizeof(Font));
-    SP_Str ttf_data = read_file(arena, filename);
-    // Push a zero onto the arena so the 'ttf_data' string works as a cstr as
-    // well.
-    sp_arena_push(arena, 1);
-    // FontProvider provider = FT2_PROVIDER;
+RNE_Handle rne_font_create(SP_Arena* arena, SP_Str ttf_data, RNE_FontCallbacks callbacks) {
+    RNE_Font* font = sp_arena_push_no_zero(arena, sizeof(RNE_Font));
     FontProvider provider = STBTT_PROVIDER;
-    *font = (Font) {
+    *font = (RNE_Font) {
         .arena = arena,
         .provider = provider,
         .internal = provider.init(arena, ttf_data),
         .ttf_data = ttf_data,
-        .map = sp_hm_new(sp_hm_desc_generic(arena, 32, u32, SizedFont)),
+        .map = sp_hm_new(sp_hm_desc_generic(arena, 32, f32, RNE_SizedFont)),
+        .cb = callbacks,
     };
-    return font;
+
+    return (RNE_Handle) {
+        .ptr = font,
+    };
 }
 
-void font_destroy(Font* font) {
-    font->provider.terminate(font->internal);
-}
-
-void font_set_size(Font* font, u32 size) {
-    font->curr_size = size;
-    if (!sp_hm_has(font->map, size)) {
-        SizedFont sized = sized_font_create(font, size);
-        sp_hm_insert(font->map, size, sized);
+void rne_font_destroy(RNE_Handle* font) {
+    RNE_Font* _font = font->ptr;
+    for (SP_HashMapIter iter = sp_hm_iter_new(_font->map);
+            sp_hm_iter_valid(iter);
+            iter = sp_hm_iter_next(iter)) {
+        RNE_SizedFont sized = sp_hm_iter_get_value(iter, RNE_SizedFont);
+        _font->cb.destroy(sized.userdata_atlas);
     }
+
+    _font->provider.terminate(_font->internal);
+}
+
+static RNE_SizedFont* get_sized_font(RNE_Font* font, f32 size) {
+    RNE_SizedFont* result = sp_hm_getp(font->map, size);
+    if (result == NULL) {
+        RNE_SizedFont sized = sized_font_create(font, size);
+        sp_hm_insert(font->map, size, sized);
+        result = sp_hm_getp(font->map, size);
+    }
+    return result;
 }
 
 static void calculate_uvs(SP_Ivec2 pos, SP_Ivec2 size, SP_Ivec2 atlas_size, SP_Vec2 uvs[2]) {
@@ -417,15 +331,15 @@ static void calculate_uvs(SP_Ivec2 pos, SP_Ivec2 size, SP_Ivec2 atlas_size, SP_V
     uvs[1] = uv_br;
 }
 
-static void expand_atlas(Font* font, SizedFont* sized) {
+static void expand_atlas(RNE_Font* font, RNE_SizedFont* sized) {
     QuadtreeAtlas packer = quadtree_atlas_init(font->arena, sp_iv2_muls(sized->atlas_packer.size, 2));
 
-    SP_Scratch scratch = sp_scratch_begin(NULL, 0);
+    SP_Scratch scratch = sp_scratch_begin(&font->arena, 1);
     u8* bitmap = sp_arena_push(scratch.arena, packer.size.x * packer.size.y);
 
     SP_HashMapIter iter = sp_hm_iter_new(sized->glyph_map);
     while (sp_hm_iter_valid(iter)) {
-        GlyphInternal* glyph = sp_hm_iter_get_valuep(iter);
+        RNE_GlyphInternal* glyph = sp_hm_iter_get_valuep(iter);
         QuadtreeAtlasNode* node = quadtree_atlas_insert(&packer, glyph->bitmap_size);
         for (i32 y = 0; y < glyph->bitmap_size.y; y++) {
             u32 atlas_index = node->pos.x + (node->pos.y + y) * packer.size.x;
@@ -439,70 +353,54 @@ static void expand_atlas(Font* font, SizedFont* sized) {
         iter = sp_hm_iter_next(iter);
     }
 
-    // Resize texture.
-    glBindTexture(GL_TEXTURE_2D, sized->atlas_texture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(GL_TEXTURE_2D,
-            0,
-            GL_R8,
-            packer.size.x,
-            packer.size.y,
-            0,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            bitmap);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
-
+    font->cb.resize(sized->userdata_atlas, packer.size, bitmap);
     sp_scratch_end(scratch);
 
     sized->atlas_packer = packer;
 }
 
-Glyph font_get_glyph(Font* font, u32 codepoint) {
-    SizedFont* sized = sp_hm_getp(font->map, font->curr_size);
-    if (sized == NULL) {
-        sp_error("Font of size %u hasn't been created.", font->curr_size);
-        return (Glyph) {0};
+SP_Vec2 rne_text_measure(RNE_Handle font, SP_Str text, f32 size) {
+    RNE_FontMetrics metrics = rne_font_get_metrics(font, size);
+    SP_Vec2 text_size = sp_v2(0.0f, metrics.ascent - metrics.descent);
+    for (u32 i = 0; i < text.len; i++) {
+        RNE_Glyph glyph = rne_font_get_glyph(font, text.data[i], size);
+        text_size.x += glyph.advance;
+        if (i < text.len - 1) {
+            text_size.x += rne_font_get_kerning(font, text.data[i], text.data[i+1], size);
+        }
     }
+    return text_size;
+}
 
-    u32 glyph_index = font->provider.get_glyph_index(font->internal, codepoint);
-    Glyph* _glyph = sp_hm_getp(sized->glyph_map, glyph_index);
+RNE_Glyph rne_font_get_glyph(RNE_Handle font, u32 codepoint, f32 size) {
+    RNE_Font* _font = font.ptr;
+    RNE_SizedFont* sized = get_sized_font(_font, size);
+
+    u32 glyph_index = _font->provider.get_glyph_index(_font->internal, codepoint);
+    RNE_Glyph* _glyph = sp_hm_getp(sized->glyph_map, glyph_index);
     if (_glyph != NULL) {
         return *_glyph;
     }
 
-    SP_Scratch scratch = sp_scratch_begin(&font->arena, 1);
-    FPGlyph fp_glyph = font->provider.get_glyph(font->internal, scratch.arena, glyph_index, sized->size);
+    SP_Scratch scratch = sp_scratch_begin(&_font->arena, 1);
+    FPGlyph fp_glyph = _font->provider.get_glyph(_font->internal, scratch.arena, glyph_index, size);
     u32 bitmap_size = fp_glyph.bitmap.size.x * fp_glyph.bitmap.size.y;
-    u8* bitmap = sp_arena_push(font->arena, bitmap_size);
+    u8* bitmap = sp_arena_push(_font->arena, bitmap_size);
     memcpy(bitmap, fp_glyph.bitmap.buffer, bitmap_size);
     sp_scratch_end(scratch);
 
     QuadtreeAtlasNode* node = quadtree_atlas_insert(&sized->atlas_packer, fp_glyph.bitmap.size);
     // Atlas out of space.
     while (node == NULL) {
-        expand_atlas(font, sized);
+        expand_atlas(_font, sized);
         node = quadtree_atlas_insert(&sized->atlas_packer, fp_glyph.bitmap.size);
     }
 
-    // Update subregion of texture.
-    glBindTexture(GL_TEXTURE_2D, sized->atlas_texture);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexSubImage2D(GL_TEXTURE_2D,
-            0,
-            node->pos.x,
-            node->pos.y,
-            fp_glyph.size.x,
-            fp_glyph.size.y,
-            GL_RED,
-            GL_UNSIGNED_BYTE,
-            bitmap);
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    _font->cb.update(sized->userdata_atlas, node->pos, fp_glyph.bitmap.size, sized->atlas_packer.size.x, bitmap);
 
-    GlyphInternal glyph = {
+    RNE_GlyphInternal glyph = {
         .user_glyph = {
             .size = fp_glyph.size,
-            // .uv = {uv_tl, uv_br},
             .offset = fp_glyph.offset,
             .advance = fp_glyph.advance,
         },
@@ -510,59 +408,25 @@ Glyph font_get_glyph(Font* font, u32 codepoint) {
         .bitmap = bitmap,
     };
     calculate_uvs(node->pos, sp_v2_to_iv2(fp_glyph.size), sized->atlas_packer.size, glyph.user_glyph.uv);
-
     sp_hm_insert(sized->glyph_map, glyph_index, glyph);
 
     return glyph.user_glyph;
 }
 
-u32 font_get_atlas(const Font* font) {
-    SizedFont* sized = sp_hm_getp(font->map, font->curr_size);
-    if (sized == NULL) {
-        sp_error("Font of size %u hasn't been created.", font->curr_size);
-        return -1;
-    }
-
-    return sized->atlas_texture;
+RNE_Handle rne_font_get_atlas(RNE_Handle font, f32 size) {
+    RNE_Font* _font = font.ptr;
+    RNE_SizedFont* sized = get_sized_font(_font, size);
+    return sized->userdata_atlas;
 }
 
-FontMetrics font_get_metrics(const Font* font) {
-    SizedFont* sized = sp_hm_getp(font->map, font->curr_size);
-    if (sized == NULL) {
-        sp_error("Font of size %u hasn't been created.", font->curr_size);
-        return (FontMetrics) {0};
-    }
-
-    return sized->metrics;
+RNE_FontMetrics rne_font_get_metrics(RNE_Handle font, f32 size) {
+    RNE_Font* _font = font.ptr;
+    return _font->provider.get_metrics(_font->internal, size);
 }
 
-f32 font_get_kerning(const Font* font, u32 left_codepoint, u32 right_codepoint) {
-    u32 left_glyph = font->provider.get_glyph_index(font->internal, left_codepoint);
-    u32 right_glyph = font->provider.get_glyph_index(font->internal, right_codepoint);
-    return font->provider.get_kerning(font->internal, left_glyph, right_glyph, font->curr_size);
-}
-
-// void debug_font_atlas(const Font* font, Quad quad, Camera cam) {
-//     SizedFont* sized = sp_hm_getp(font->map, font->curr_size);
-//     if (sized == NULL) {
-//         sp_error("Font of size %u hasn't been created.", font->curr_size);
-//         return;
-//     }
-//
-//     quadtree_atlas_debug_draw(sized->atlas_packer, quad, cam);
-// }
-
-SP_Vec2 font_measure_string(Font* font, SP_Str str) {
-    FontMetrics metrics = font_get_metrics(font);
-    SP_Vec2 size = sp_v2(0.0f, metrics.ascent - metrics.descent);
-
-    for (u32 i = 0; i < str.len; i++) {
-        Glyph glyph = font_get_glyph(font, str.data[i]);
-        size.x += glyph.advance;
-        if (i < str.len - 1) {
-            size.x += font_get_kerning(font, str.data[i], str.data[i+1]);
-        }
-    }
-
-    return size;
+f32 rne_font_get_kerning(RNE_Handle font, u32 left_codepoint, u32 right_codepoint, f32 size) {
+    RNE_Font* _font = font.ptr;
+    u32 left_glyph = _font->provider.get_glyph_index(_font->internal, left_codepoint);
+    u32 right_glyph = _font->provider.get_glyph_index(_font->internal, right_codepoint);
+    return _font->provider.get_kerning(_font->internal, left_glyph, right_glyph, size);
 }

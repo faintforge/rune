@@ -6,6 +6,7 @@
 #include "renderer.h"
 #include "font.h"
 
+#include <assert.h>
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
@@ -35,10 +36,17 @@ RNE_Handle get_atlas(RNE_Handle font, f32 height) {
     };
 }
 
-f32 get_ascent(RNE_Handle font, f32 height) {
+RNE_FontMetrics get_ascent(RNE_Handle font, f32 height) {
     Font* f = font.ptr;
     font_set_size(f, height);
-    return font_get_metrics(f).ascent;
+    FontMetrics metrics = font_get_metrics(f);
+    return *(RNE_FontMetrics*) &metrics;
+}
+
+f32 get_kerning(RNE_Handle font, u32 left, u32 right, f32 height) {
+    Font* f = font.ptr;
+    font_set_size(f, height);
+    return font_get_kerning(f, left, right);
 }
 
 static RNE_Mouse mouse = {0};
@@ -261,7 +269,7 @@ static RNE_Widget* slider(SP_Str id, f32* value, f32 min, f32 max) {
     return widget;
 }
 
-i32 main(void) {
+i32 main_2(void) {
     sp_init(SP_CONFIG_DEFAULT);
     glfwInit();
     SP_Arena* arena = sp_arena_create();
@@ -295,26 +303,7 @@ i32 main(void) {
     // Font* font = font_create(arena, sp_str_lit("assets/Tiny5/Tiny5-Regular.ttf"));
     Font* font = font_create(arena, sp_str_lit("assets/Roboto_Mono/static/RobotoMono-Regular.ttf"));
 
-    u32 test_tex = 0;
-    glGenTextures(1, &test_tex);
-    glBindTexture(GL_TEXTURE_2D, test_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, (u8[]) {
-            255, 0, 0, 255,
-            0, 255, 0, 255,
-            0, 0, 255, 255,
-            255, 0, 255, 255,
-        });
-
-    rne_init((RNE_FontInterface) {
-            .measure = measure,
-            .query = query,
-            .get_atlas = get_atlas,
-            .get_ascent = get_ascent,
-        }, (RNE_StyleStack) {
+    rne_init((RNE_StyleStack) {
             .size = {
                 [RNE_AXIS_HORIZONTAL] = {
                     .kind = RNE_SIZE_KIND_CHILDREN,
@@ -333,7 +322,7 @@ i32 main(void) {
             .font_size = 24,
             .flow = RNE_AXIS_VERTICAL,
             .text_align = RNE_TEXT_ALIGN_LEFT,
-        });
+        }, measure);
 
     u32 fps = 0;
     u32 last_fps = 0;
@@ -515,6 +504,12 @@ i32 main(void) {
         RNE_Handle textures[8] = {0};
         while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
                 .arena = rne_get_arena(),
+                .font = (RNE_FontInterface) {
+                    .get_glyph = query,
+                    .get_atlas = get_atlas,
+                    .get_metrics = get_ascent,
+                    .get_kerning = get_kerning,
+                },
                 .vertex_buffer = nr.vertex_buffer,
                 .vertex_capacity = sp_arrlen(nr.vertex_buffer),
                 .index_buffer = nr.index_buffer,

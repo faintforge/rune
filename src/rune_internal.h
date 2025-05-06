@@ -10,7 +10,7 @@
     X(Bg, bg, SP_Color) \
     X(Fg, fg, SP_Color) \
     X(Font, font, RNE_Handle) \
-    X(FontSize, font_size, u32) \
+    X(FontSize, font_size, f32) \
     X(Flow, flow, RNE_Axis) \
     X(Parent, parent, RNE_Widget*) \
     X(FixedX, fixed_x, f32) \
@@ -42,7 +42,7 @@ struct RNE_Context {
     RNE_Widget* focused_widget;
     RNE_Mouse mouse;
 
-    RNE_FontInterface font;
+    RNE_TextMeasureFunc text_measure;
 
     // Styles
     RNE_StyleStack default_style_stack;

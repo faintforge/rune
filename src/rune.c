@@ -36,15 +36,15 @@ static void generate_header_functions(void) {
     #undef X
 }
 
-void rne_init(RNE_FontInterface font, RNE_StyleStack default_style_stack) {
+void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measure_func) {
     ctx = (RNE_Context) {
         .arena = sp_arena_create(),
         .frame_arenas = {
             sp_arena_create(),
             sp_arena_create(),
         },
-        .font = font,
         .default_style_stack = default_style_stack,
+        .text_measure = text_measure_func,
     };
     sp_arena_tag(ctx.arena, sp_str_lit("ui-state"));
     sp_arena_tag(ctx.frame_arenas[0], sp_str_lit("ui-frame-0"));
@@ -101,7 +101,7 @@ static void build_fixed_sizes(RNE_Widget* widget) {
     SP_Vec2 text_size = sp_v2s(0.0f);
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
         if (widget->size[i].kind == RNE_SIZE_KIND_TEXT) {
-            text_size = ctx.font.measure(widget->font, widget->text, widget->font_size);
+            text_size = ctx.text_measure(widget->font, widget->text, widget->font_size);
             break;
         }
     }
@@ -319,7 +319,7 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
 
     if (widget->flags & RNE_WIDGET_FLAG_DRAW_TEXT) {
         SP_Vec2 pos = widget->computed_absolute_position;
-        SP_Vec2 text_size = ctx.font.measure(widget->font, widget->text, widget->font_size);
+        SP_Vec2 text_size = ctx.text_measure(widget->font, widget->text, widget->font_size);
         switch (widget->text_align) {
             case RNE_TEXT_ALIGN_LEFT:
                 break;

@@ -1,5 +1,6 @@
 #include "rune_tessellation.h"
 #include "rune_internal.h"
+#include "spire.h"
 
 #define PI 3.14159265358979323846
 
@@ -158,9 +159,6 @@ static void push_image(Path* path, RNE_DrawImage rect) {
             .color = rect.color,
             .uv = sp_v2(uv_right, uv_top),
         });
-}
-
-static void push_text(Path* path, RNE_DrawText text) {
 }
 
 typedef struct FattenConfig FattenConfig;
@@ -389,19 +387,19 @@ static u32 find_texture(RNE_Handle* buffer, u32 capacity, u32* count, RNE_Handle
     return *count - 1;
 }
 
-static void pre_process_buffer(RNE_DrawCmdBuffer* buffer) {
+static void pre_process_buffer(RNE_DrawCmdBuffer* buffer, RNE_FontInterface font) {
     for (RNE_DrawCmd* cmd = buffer->first; cmd != NULL; cmd = cmd->next) {
         if (cmd->type != RNE_DRAW_CMD_TYPE_TEXT) {
             continue;
         }
 
         RNE_DrawText text = cmd->data.text;
-        RNE_Handle atlas = ctx.font.get_atlas(text.font_handle, text.font_size);
+        RNE_Handle atlas = font.get_atlas(text.font_handle, text.font_size);
 
         SP_Vec2 gpos = text.pos;
-        gpos.y += ctx.font.get_ascent(text.font_handle, text.font_size);
+        gpos.y += font.get_metrics(text.font_handle, text.font_size).ascent;
         for (u32 i = 0; i < text.text.len; i++) {
-            RNE_Glyph glyph = ctx.font.query(text.font_handle, text.text.data[i], text.font_size);
+            RNE_Glyph glyph = font.get_glyph(text.font_handle, text.text.data[i], text.font_size);
             SP_Vec2 non_snapped = sp_v2_add(gpos, glyph.offset);
             SP_Vec2 snapped = sp_v2(
                     floorf(non_snapped.x),
@@ -423,6 +421,9 @@ static void pre_process_buffer(RNE_DrawCmdBuffer* buffer) {
             sp_dll_insert(buffer->first, buffer->last, image_cmd, cmd);
 
             gpos.x += glyph.advance;
+            if (font.get_kerning != NULL && i < text.text.len - 1) {
+                gpos.x += font.get_kerning(text.font_handle, text.text.data[i], text.text.data[i+1], text.font_size);
+            }
         }
     }
 }
@@ -437,7 +438,7 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
             .pos = sp_v2s(-(1<<13)),
             .size = sp_v2s(1<<14),
         };
-        pre_process_buffer(buffer);
+        pre_process_buffer(buffer, config.font);
     }
 
     RNE_RenderCmd* first = NULL;
@@ -481,8 +482,6 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
                 texture = cmd->data.image.texture_handle;
                 break;
             case RNE_DRAW_CMD_TYPE_TEXT:
-                push_text(&path, cmd->data.text);
-                texture = ctx.font.get_atlas(cmd->data.text.font_handle, cmd->data.text.font_size);
                 break;
             case RNE_DRAW_CMD_TYPE_SCISSOR:
                 push_render_cmd(config.arena,

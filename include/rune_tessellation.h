@@ -2,6 +2,37 @@
 
 #include "rune.h"
 
+typedef struct RNE_Glyph RNE_Glyph;
+struct RNE_Glyph {
+    SP_Vec2 size;
+    SP_Vec2 offset;
+    f32 advance;
+    // [0] = Top left
+    // [1] = Bottom right
+    SP_Vec2 uv[2];
+};
+
+typedef struct RNE_FontMetrics RNE_FontMetrics;
+struct RNE_FontMetrics {
+    f32 ascent;
+    f32 descent;
+    f32 linegap;
+};
+
+typedef RNE_Glyph (*RNE_FontGetGlyphFunc)(RNE_Handle font, u32 codepoint, f32 size);
+typedef RNE_Handle (*RNE_FontGetAtlasFunc)(RNE_Handle font, f32 size);
+typedef RNE_FontMetrics (*RNE_FontGetMetricsFunc)(RNE_Handle font, f32 size);
+typedef f32 (*RNE_FontGetKerningFunc)(RNE_Handle font, u32 left_codepoint, u32 right_codepoint, f32 size);
+
+typedef struct RNE_FontInterface RNE_FontInterface;
+struct RNE_FontInterface {
+    RNE_FontGetGlyphFunc get_glyph;
+    RNE_FontGetAtlasFunc get_atlas;
+    RNE_FontGetMetricsFunc get_metrics;
+    // Can be left as null.
+    RNE_FontGetKerningFunc get_kerning;
+};
+
 typedef struct RNE_Vertex RNE_Vertex;
 struct RNE_Vertex {
     SP_Vec2 pos;
@@ -13,6 +44,7 @@ struct RNE_Vertex {
 typedef struct RNE_TessellationConfig RNE_TessellationConfig;
 struct RNE_TessellationConfig {
     SP_Arena* arena;
+    RNE_FontInterface font;
 
     RNE_Vertex* vertex_buffer;
     u32 vertex_capacity;
@@ -53,4 +85,3 @@ struct RNE_TessellationState {
 extern RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
         RNE_TessellationConfig config,
         RNE_TessellationState* state);
-

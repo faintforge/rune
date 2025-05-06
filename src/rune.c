@@ -1049,6 +1049,26 @@ static FattenResult path_fatten(Path* path, FattenConfig config, const RNE_DrawC
     return result;
 }
 
+static void push_render_cmd(SP_Arena* arena,
+        RNE_RenderCmd** first,
+        RNE_RenderCmd** last,
+        u32 index_end,
+        u32* index_count,
+        RNE_DrawScissor scissor) {
+    if (*index_count <= 0) {
+        return;
+    }
+
+    RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(arena, sizeof(RNE_RenderCmd));
+    *render_cmd = (RNE_RenderCmd) {
+        .start_offset_bytes = (index_end - *index_count) * sizeof(u16),
+        .index_count = *index_count,
+        .scissor = scissor,
+    };
+    sp_sll_queue_push(*first, *last, render_cmd);
+    *index_count = 0;
+}
+
 RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
         RNE_TessellationConfig config,
         RNE_TessellationState* state) {
@@ -1083,9 +1103,9 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
     for (; state->current_cmd != NULL; state->current_cmd = state->current_cmd->next) {
         RNE_DrawCmd* cmd = state->current_cmd;
         switch (cmd->type) {
-            case RNE_DRAW_CMD_TYPE_LINE: {
+            case RNE_DRAW_CMD_TYPE_LINE:
                 push_line(&path, cmd->data.line);
-            } break;
+                break;
             case RNE_DRAW_CMD_TYPE_ARC:
                 push_arc(&path, cmd->data.arc);
                 if (cmd->filled) {
@@ -1103,17 +1123,10 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
                 break;
             case RNE_DRAW_CMD_TYPE_TEXT:
                 break;
-            case RNE_DRAW_CMD_TYPE_SCISSOR: {
-                RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(config.arena, sizeof(RNE_RenderCmd));
-                *render_cmd = (RNE_RenderCmd) {
-                    .start_offset_bytes = (index_end - index_count) * sizeof(u16),
-                    .index_count = index_count,
-                    .scissor = state->current_scissor,
-                };
-                sp_sll_queue_push(first, last, render_cmd);
-                index_count = 0;
+            case RNE_DRAW_CMD_TYPE_SCISSOR:
+                push_render_cmd(config.arena, &first, &last, index_end, &index_count, state->current_scissor);
                 state->current_scissor = cmd->data.scissor;
-            } break;
+                break;
         }
 
         FattenResult result = path_fatten(&path, (FattenConfig) {
@@ -1145,15 +1158,8 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
     }
     sp_scratch_end(scratch);
 
-    if (state->current_cmd == NULL && !state->finished) {
-        RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(config.arena, sizeof(RNE_RenderCmd));
-        *render_cmd = (RNE_RenderCmd) {
-            .start_offset_bytes = (index_end - index_count) * sizeof(u16),
-                .index_count = index_count,
-                .scissor = state->current_scissor,
-        };
-        sp_sll_queue_push(first, last, render_cmd);
-        index_count = 0;
+    if (state->current_cmd == NULL && !state->finished && index_count > 0) {
+        push_render_cmd(config.arena, &first, &last, index_end, &index_count, state->current_scissor);
         state->finished = true;
     }
 

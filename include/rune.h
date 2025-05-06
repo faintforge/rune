@@ -83,9 +83,6 @@ struct RNE_DrawScissor {
 
 typedef struct RNE_DrawCmd RNE_DrawCmd;
 struct RNE_DrawCmd {
-    RNE_DrawCmd* next;
-    RNE_DrawCmd* prev;
-
     RNE_DrawCmdType type;
     f32 thickness;
     b8 filled;
@@ -99,16 +96,14 @@ struct RNE_DrawCmd {
         RNE_DrawImage image;
         RNE_DrawScissor scissor;
     } data;
+
+    RNE_DrawCmd* next;
+    RNE_DrawCmd* prev;
 };
 
 typedef struct RNE_DrawCmdBuffer RNE_DrawCmdBuffer;
-struct RNE_DrawCmdBuffer {
-    SP_Arena* arena;
-    RNE_DrawCmd* first;
-    RNE_DrawCmd* last;
-};
 
-extern RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena);
+extern RNE_DrawCmdBuffer* rne_draw_buffer_begin(SP_Arena* arena);
 extern void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd);
 
 extern void rne_draw_line(RNE_DrawCmdBuffer* buffer, RNE_DrawLine line);
@@ -255,7 +250,7 @@ typedef SP_Vec2 (*RNE_TextMeasureFunc)(RNE_Handle font, SP_Str text, f32 size);
 extern void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measure_func);
 extern void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse);
 extern void rne_end(void);
-extern RNE_DrawCmdBuffer rne_draw(SP_Arena* arena);
+extern RNE_DrawCmdBuffer* rne_draw(SP_Arena* arena);
 
 extern SP_Arena* rne_get_arena(void);
 extern RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags);

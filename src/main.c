@@ -488,7 +488,7 @@ i32 main_2(void) {
         rne_end();
 
         // Render
-        RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
+        RNE_DrawCmdBuffer* buffer = rne_draw(frame_arena);
 
         glViewport(0, 0, screen_size.x, screen_size.y);
         glScissor(0, 0, screen_size.x, screen_size.y);
@@ -496,13 +496,13 @@ i32 main_2(void) {
         glClear(GL_COLOR_BUFFER_BIT);
 
         RNE_BatchCmd batch;
-        RNE_TessellationState state = {0};
+        RNE_TessellationState* state = NULL;
         glBindVertexArray(nr.vao);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nr.ibo);
         glUseProgram(nr.shader);
         new_renderer_update_projection(&nr, screen_size);
         RNE_Handle textures[8] = {0};
-        while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
+        while ((batch = rne_tessellate(buffer, (RNE_TessellationConfig) {
                 .arena = rne_get_arena(),
                 .font = (RNE_FontInterface) {
                     .get_glyph = query,

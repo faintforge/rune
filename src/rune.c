@@ -1,4 +1,5 @@
 #include "rune_internal.h"
+#include "spire.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -362,10 +363,9 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     rne_draw_helper(buffer, widget->next);
 }
 
-RNE_DrawCmdBuffer rne_draw(SP_Arena* arena) {
-    RNE_DrawCmdBuffer buffer = rne_draw_buffer_begin(arena);
-
-    rne_draw_helper(&buffer, &ctx.container);
+RNE_DrawCmdBuffer* rne_draw(SP_Arena* arena) {
+    RNE_DrawCmdBuffer* buffer = rne_draw_buffer_begin(arena);
+    rne_draw_helper(buffer, &ctx.container);
     return buffer;
 }
 
@@ -597,10 +597,10 @@ LIST_STYLE_STACKS
 
 // -- Drawing ------------------------------------------------------------------
 
-RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena) {
-    return (RNE_DrawCmdBuffer) {
-        .arena = arena,
-    };
+RNE_DrawCmdBuffer* rne_draw_buffer_begin(SP_Arena* arena) {
+    RNE_DrawCmdBuffer* buffer = sp_arena_push(arena, sizeof(RNE_DrawCmdBuffer));
+    buffer->arena = arena;
+    return buffer;
 }
 
 void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd) {

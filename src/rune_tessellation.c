@@ -401,10 +401,7 @@ static void pre_process_buffer(RNE_DrawCmdBuffer* buffer, RNE_FontInterface font
         for (u32 i = 0; i < text.text.len; i++) {
             RNE_Glyph glyph = font.get_glyph(text.font_handle, text.text.data[i], text.font_size);
             SP_Vec2 non_snapped = sp_v2_add(gpos, glyph.offset);
-            SP_Vec2 snapped = sp_v2(
-                    floorf(non_snapped.x),
-                    floorf(non_snapped.y)
-                    );
+            SP_Vec2 snapped = sp_v2(floorf(non_snapped.x), floorf(non_snapped.y));
 
             RNE_DrawCmd* image_cmd = sp_arena_push_no_zero(buffer->arena, sizeof(RNE_DrawCmd));
             *image_cmd = (RNE_DrawCmd) {
@@ -428,17 +425,31 @@ static void pre_process_buffer(RNE_DrawCmdBuffer* buffer, RNE_FontInterface font
     }
 }
 
+struct RNE_TessellationState {
+    b8 finished;
+    b8 not_first_call;
+    RNE_DrawCmd* current_cmd;
+    RNE_DrawScissor current_scissor;
+};
+
 RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
         RNE_TessellationConfig config,
-        RNE_TessellationState* state) {
-    if (!state->not_first_call) {
-        state->not_first_call = true;
-        state->current_cmd = buffer->first;
-        state->current_scissor = (RNE_DrawScissor) {
+        RNE_TessellationState** state) {
+    RNE_TessellationState* _state = *state;
+    // First call
+    if (_state == NULL) {
+        *state = sp_arena_push(config.arena, sizeof(RNE_TessellationState));
+        _state = *state;
+        _state->current_cmd = buffer->first;
+        _state->current_scissor = (RNE_DrawScissor) {
             .pos = sp_v2s(-(1<<13)),
             .size = sp_v2s(1<<14),
         };
         pre_process_buffer(buffer, config.font);
+    }
+
+    if (_state->finished) {
+        return (RNE_BatchCmd) {0};
     }
 
     RNE_RenderCmd* first = NULL;
@@ -455,8 +466,8 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
         .points = points,
     };
 
-    for (; state->current_cmd != NULL; state->current_cmd = state->current_cmd->next) {
-        RNE_DrawCmd* cmd = state->current_cmd;
+    for (; _state->current_cmd != NULL; _state->current_cmd = _state->current_cmd->next) {
+        RNE_DrawCmd* cmd = _state->current_cmd;
         RNE_Handle texture = config.null_texture;
         switch (cmd->type) {
             case RNE_DRAW_CMD_TYPE_LINE:
@@ -489,8 +500,8 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
                         &last,
                         index_end,
                         &index_count,
-                        state->current_scissor);
-                state->current_scissor = cmd->data.scissor;
+                        _state->current_scissor);
+                _state->current_scissor = cmd->data.scissor;
                 break;
         }
 
@@ -504,7 +515,7 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
                     &last,
                     index_end,
                     &index_count,
-                    state->current_scissor);
+                    _state->current_scissor);
             break;
         }
 
@@ -526,7 +537,7 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
                     &last,
                     index_end,
                     &index_count,
-                    state->current_scissor);
+                    _state->current_scissor);
             break;
         }
 
@@ -536,14 +547,14 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
     }
     sp_scratch_end(scratch);
 
-    if (state->current_cmd == NULL && !state->finished && index_count > 0) {
+    if (_state->current_cmd == NULL && !_state->finished && index_count > 0) {
         push_render_cmd(config.arena,
                 &first,
                 &last,
                 index_end,
                 &index_count,
-                state->current_scissor);
-        state->finished = true;
+                _state->current_scissor);
+        _state->finished = true;
     }
 
     RNE_BatchCmd batch_cmd = {

@@ -75,13 +75,7 @@ struct RNE_BatchCmd {
 };
 
 typedef struct RNE_TessellationState RNE_TessellationState;
-struct RNE_TessellationState {
-    b8 finished;
-    b8 not_first_call;
-    RNE_DrawCmd* current_cmd;
-    RNE_DrawScissor current_scissor;
-};
 
 extern RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
         RNE_TessellationConfig config,
-        RNE_TessellationState* state);
+        RNE_TessellationState** state);

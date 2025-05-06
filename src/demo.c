@@ -3,12 +3,12 @@
 #include "rune_tessellation.h"
 #include "spire.h"
 
+#include "new_renderer.h"
+
 #include <stdio.h>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
-
-#include "new_renderer.h"
 
 static SP_Str read_file(SP_Arena* arena, SP_Str filename) {
     const char* cstr_filename = sp_str_to_cstr(arena, filename);
@@ -232,22 +232,21 @@ i32 main(void) {
 
         // Render
         SP_Arena* frame_arena = rne_get_arena();
-        RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
+        RNE_DrawCmdBuffer* buffer = rne_draw(frame_arena);
 
         glViewport(0, 0, screen_size.x, screen_size.y);
-        glScissor(0, 0, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 
         RNE_BatchCmd batch;
-        RNE_TessellationState state = {0};
+        RNE_TessellationState* state = NULL;
         glBindVertexArray(nr.vao);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nr.ibo);
         glUseProgram(nr.shader);
         new_renderer_update_projection(&nr, screen_size);
         RNE_Handle textures[8] = {0};
-        while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
-                .arena = rne_get_arena(),
+        while ((batch = rne_tessellate(buffer, (RNE_TessellationConfig) {
+                .arena = frame_arena,
                 .font = RNE_FONT_INTERFACE,
                 .vertex_buffer = nr.vertex_buffer,
                 .vertex_capacity = sp_arrlen(nr.vertex_buffer),

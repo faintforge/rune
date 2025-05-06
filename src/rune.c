@@ -722,6 +722,14 @@ void rne_draw_rect_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect, f32 thic
         });
 }
 
+void rne_draw_image(RNE_DrawCmdBuffer* buffer, RNE_DrawImage image) {
+    rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
+            .type = RNE_DRAW_CMD_TYPE_IMAGE,
+            .filled = true,
+            .data.image = image,
+        });
+}
+
 void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text) {
     rne_draw_buffer_push(buffer, (RNE_DrawCmd) {
             .type = RNE_DRAW_CMD_TYPE_TEXT,
@@ -865,16 +873,52 @@ static void push_rect(Path* path, RNE_DrawRect rect) {
         });
 }
 
+static void push_image(Path* path, RNE_DrawImage rect) {
+    f32 uv_left   = rect.uv[0].x;
+    f32 uv_right  = rect.uv[1].x;
+    f32 uv_top    = rect.uv[0].y;
+    f32 uv_bottom = rect.uv[1].y;
+
+    // Top left
+    push_point(path, (RNE_Vertex) {
+            .pos = sp_v2(rect.pos.x, rect.pos.y),
+            .color = rect.color,
+            .uv = sp_v2(uv_left, uv_top),
+        });
+    // Bottom left
+    push_point(path, (RNE_Vertex) {
+            .pos = sp_v2(rect.pos.x, rect.pos.y + rect.size.y),
+            .color = rect.color,
+            .uv = sp_v2(uv_left, uv_bottom),
+        });
+    // Bottom right
+    push_point(path, (RNE_Vertex) {
+            .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y),
+            .color = rect.color,
+            .uv = sp_v2(uv_right, uv_bottom),
+        });
+    // Top right
+    push_point(path, (RNE_Vertex) {
+            .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y),
+            .color = rect.color,
+            .uv = sp_v2(uv_right, uv_top),
+        });
+}
+
+static void push_text(Path* path, RNE_DrawText text) {
+}
+
 typedef struct FattenConfig FattenConfig;
 struct FattenConfig {
     RNE_Vertex* vertex_buffer;
-    u16* index_buffer;
-
     u32 vertex_capacity;
-    u32 index_capacity;
-
     u32 vertex_end;
+
+    u16* index_buffer;
+    u32 index_capacity;
     u32 index_end;
+
+    u32 texture_index;
 };
 
 typedef struct FattenResult FattenResult;
@@ -909,6 +953,7 @@ static FattenResult path_fill_convex(const Path* path, FattenConfig config) {
     u32 point_count = path->point_i;
     for (u32 i = 0; i < point_count; i++) {
         config.vertex_buffer[start_offset + i] = path->points[i];
+        config.vertex_buffer[start_offset + i].texture_index = config.texture_index;
     }
 
     u32 index_i = config.index_end;
@@ -1069,15 +1114,67 @@ static void push_render_cmd(SP_Arena* arena,
     *index_count = 0;
 }
 
+// Returns index of wanted texture within buffer.
+// If buffer is out of space, returns -1.
+static u32 find_texture(RNE_Handle* buffer, u32 capacity, u32* count, RNE_Handle wanted) {
+    for (u32 i = 0; i < *count; i++) {
+        if (buffer[i].ptr == wanted.ptr) {
+            return i;
+        }
+    }
+
+    // Too many textures.
+    if (*count == capacity) {
+        return -1;
+    }
+
+    // Texture not in buffer
+    buffer[*count] = wanted;
+    (*count)++;
+    return *count - 1;
+}
+
+static void pre_process_buffer(RNE_DrawCmdBuffer* buffer) {
+    for (RNE_DrawCmd* cmd = buffer->first; cmd != NULL; cmd = cmd->next) {
+        if (cmd->type != RNE_DRAW_CMD_TYPE_TEXT) {
+            continue;
+        }
+
+        RNE_DrawText text = cmd->data.text;
+        RNE_Handle atlas = ctx.font.get_atlas(text.font_handle, text.font_size);
+
+        SP_Vec2 gpos = text.pos;
+        gpos.y += ctx.font.get_ascent(text.font_handle, text.font_size);
+        for (u32 i = 0; i < text.text.len; i++) {
+            RNE_Glyph glyph = ctx.font.query(text.font_handle, text.text.data[i], text.font_size);
+            SP_Vec2 non_snapped = sp_v2_add(gpos, glyph.offset);
+            SP_Vec2 snapped = sp_v2(
+                    floorf(non_snapped.x),
+                    floorf(non_snapped.y)
+                    );
+
+            RNE_DrawCmd* image_cmd = sp_arena_push_no_zero(buffer->arena, sizeof(RNE_DrawCmd));
+            *image_cmd = (RNE_DrawCmd) {
+                .type = RNE_DRAW_CMD_TYPE_IMAGE,
+                    .filled = true,
+                    .data.image = {
+                        .pos = snapped,
+                        .size = glyph.size,
+                        .uv = {glyph.uv[0], glyph.uv[1]},
+                        .texture_handle = atlas,
+                        .color = text.color,
+                    },
+            };
+            sp_dll_insert(buffer->first, buffer->last, image_cmd, cmd);
+
+            gpos.x += glyph.advance;
+        }
+    }
+}
+
 RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
         RNE_TessellationConfig config,
         RNE_TessellationState* state) {
-    // Build shape
-    // Check if vbuff and ibuff has capacity for it
-    // If not, return current batch
-
-    // TODO: Text rendering
-
     if (!state->not_first_call) {
         state->not_first_call = true;
         state->current_cmd = buffer->first;
@@ -1085,6 +1182,7 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
             .pos = sp_v2s(-(1<<13)),
             .size = sp_v2s(1<<14),
         };
+        pre_process_buffer(buffer);
     }
 
     RNE_RenderCmd* first = NULL;
@@ -1093,6 +1191,7 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
     u32 vertex_end = 0;
     u32 index_end = 0;
     u32 index_count = 0;
+    u32 texture_count = 0;
 
     SP_Scratch scratch = sp_scratch_begin(&config.arena, 1);
     RNE_Vertex* points = sp_arena_push_no_zero(scratch.arena, sizeof(RNE_Vertex) * config.vertex_capacity);
@@ -1102,6 +1201,7 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
 
     for (; state->current_cmd != NULL; state->current_cmd = state->current_cmd->next) {
         RNE_DrawCmd* cmd = state->current_cmd;
+        RNE_Handle texture = config.null_texture;
         switch (cmd->type) {
             case RNE_DRAW_CMD_TYPE_LINE:
                 push_line(&path, cmd->data.line);
@@ -1121,34 +1221,58 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
             case RNE_DRAW_CMD_TYPE_RECT:
                 push_rect(&path, cmd->data.rect);
                 break;
+            case RNE_DRAW_CMD_TYPE_IMAGE:
+                push_image(&path, cmd->data.image);
+                texture = cmd->data.image.texture_handle;
+                break;
             case RNE_DRAW_CMD_TYPE_TEXT:
+                push_text(&path, cmd->data.text);
+                texture = ctx.font.get_atlas(cmd->data.text.font_handle, cmd->data.text.font_size);
                 break;
             case RNE_DRAW_CMD_TYPE_SCISSOR:
-                push_render_cmd(config.arena, &first, &last, index_end, &index_count, state->current_scissor);
+                push_render_cmd(config.arena,
+                        &first,
+                        &last,
+                        index_end,
+                        &index_count,
+                        state->current_scissor);
                 state->current_scissor = cmd->data.scissor;
                 break;
         }
 
+        i32 texture_index = find_texture(config.texture_buffer,
+                    config.texture_capacity,
+                    &texture_count,
+                    texture);
+        if (texture_index < 0) {
+            push_render_cmd(config.arena,
+                    &first,
+                    &last,
+                    index_end,
+                    &index_count,
+                    state->current_scissor);
+            break;
+        }
+
         FattenResult result = path_fatten(&path, (FattenConfig) {
                 .vertex_buffer = config.vertex_buffer,
-                .index_buffer = config.index_buffer,
-
+                .vertex_capacity = config.vertex_capacity,
                 .vertex_end = vertex_end,
+
+                .index_buffer = config.index_buffer,
+                .index_capacity = config.index_capacity,
                 .index_end = index_end,
 
-                .vertex_capacity = config.vertex_capacity,
-                .index_capacity = config.index_capacity,
+                .texture_index = texture_index,
             }, cmd);
 
         if (result.out_of_memory) {
-            RNE_RenderCmd* render_cmd = sp_arena_push_no_zero(config.arena, sizeof(RNE_RenderCmd));
-            *render_cmd = (RNE_RenderCmd) {
-                .start_offset_bytes = (index_end - index_count) * sizeof(u16),
-                    .index_count = index_count,
-                    .scissor = state->current_scissor,
-            };
-            sp_sll_queue_push(first, last, render_cmd);
-            index_count = 0;
+            push_render_cmd(config.arena,
+                    &first,
+                    &last,
+                    index_end,
+                    &index_count,
+                    state->current_scissor);
             break;
         }
 
@@ -1159,13 +1283,19 @@ RNE_BatchCmd rne_tessellate(RNE_DrawCmdBuffer* buffer,
     sp_scratch_end(scratch);
 
     if (state->current_cmd == NULL && !state->finished && index_count > 0) {
-        push_render_cmd(config.arena, &first, &last, index_end, &index_count, state->current_scissor);
+        push_render_cmd(config.arena,
+                &first,
+                &last,
+                index_end,
+                &index_count,
+                state->current_scissor);
         state->finished = true;
     }
 
     RNE_BatchCmd batch_cmd = {
-        .index_count = index_end,
         .vertex_count = vertex_end,
+        .index_count = index_end,
+        .texture_count = texture_count,
         .render_cmds = first,
     };
     return batch_cmd;

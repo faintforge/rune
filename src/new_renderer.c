@@ -31,6 +31,9 @@ NewRenderer new_renderer_create(void) {
     // Color
     glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(RNE_Vertex), (const void*) sp_offset(RNE_Vertex, color));
     glEnableVertexAttribArray(2);
+    // Texture index
+    glVertexAttribIPointer(3, 1, GL_UNSIGNED_INT, sizeof(RNE_Vertex), (const void*) sp_offset(RNE_Vertex, texture_index));
+    glEnableVertexAttribArray(3);
 
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -38,23 +41,31 @@ NewRenderer new_renderer_create(void) {
 
     // Shader
     const SP_Str vertex_source = sp_str_lit(
-            "#version 330 core\n"
+            "#version 460 core\n"
             "layout (location = 0) in vec2 aPos;\n"
             "layout (location = 1) in vec2 aUv;\n"
             "layout (location = 2) in vec4 aColor;\n"
+            "layout (location = 3) in uint aTextureIndex;\n"
+            "out vec2 uv;\n"
             "out vec4 color;\n"
+            "flat out uint textureIndex;\n"
             "uniform mat4 projection;\n"
             "void main() {\n"
+            "    uv = aUv;\n"
             "    color = aColor;\n"
+            "    textureIndex = aTextureIndex;\n"
             "    gl_Position = projection * vec4(aPos, 0.0, 1.0);\n"
             "}\n"
         );
     const SP_Str fragment_source = sp_str_lit(
-            "#version 330 core\n"
+            "#version 460 core\n"
             "layout (location = 0) out vec4 fragColor;\n"
+            "in vec2 uv;\n"
             "in vec4 color;\n"
+            "flat in uint textureIndex;\n"
+            "uniform sampler2D tex[8];\n"
             "void main() {\n"
-            "    fragColor = color;\n"
+            "    fragColor = texture(tex[textureIndex], uv) * color;\n"
             "}\n"
         );
 
@@ -92,6 +103,24 @@ NewRenderer new_renderer_create(void) {
     glDeleteShader(v_shader);
     glDeleteShader(f_shader);
 
+    // Bind samplers to correct unit
+    i32 samplers[8];
+    for (u32 i = 0; i < sp_arrlen(samplers); i++) {
+        samplers[i] = i;
+    }
+    glUseProgram(renderer.shader);
+    u32 loc = glGetUniformLocation(renderer.shader, "tex");
+    glUniform1iv(loc, sp_arrlen(samplers), samplers);
+
+    // Null texture
+    glGenTextures(1, &renderer.null_texture);
+    glBindTexture(GL_TEXTURE_2D, renderer.null_texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, (u32[]) {0xffffffff});
+
     return renderer;
 }
 
@@ -100,6 +129,7 @@ void new_renderer_destroy(NewRenderer* renderer) {
     glDeleteBuffers(1, &renderer->vbo);
     glDeleteBuffers(1, &renderer->ibo);
     glDeleteProgram(renderer->shader);
+    glDeleteTextures(1, &renderer->null_texture);
 }
 
 void new_renderer_update_buffers(NewRenderer* renderer, u32 vertex_count, u32 index_count) {

@@ -26,6 +26,20 @@ RNE_Glyph query(RNE_Handle font, u32 codepoint, f32 height) {
     };
 }
 
+RNE_Handle get_atlas(RNE_Handle font, f32 height) {
+    Font* f = font.ptr;
+    font_set_size(f, height);
+    return (RNE_Handle) {
+        .id = font_get_atlas(f),
+    };
+}
+
+f32 get_ascent(RNE_Handle font, f32 height) {
+    Font* f = font.ptr;
+    font_set_size(f, height);
+    return font_get_metrics(f).ascent;
+}
+
 static RNE_Mouse mouse = {0};
 static void reset_mouse(void) {
     mouse.pos_delta = sp_v2s(0.0f);
@@ -280,9 +294,25 @@ i32 main(void) {
     // Font* font = font_create(arena, sp_str_lit("assets/Tiny5/Tiny5-Regular.ttf"));
     Font* font = font_create(arena, sp_str_lit("assets/Roboto_Mono/static/RobotoMono-Regular.ttf"));
 
+    u32 test_tex = 0;
+    glGenTextures(1, &test_tex);
+    glBindTexture(GL_TEXTURE_2D, test_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, (u8[]) {
+            255, 0, 0, 255,
+            0, 255, 0, 255,
+            0, 0, 255, 255,
+            255, 0, 255, 255,
+        });
+
     rne_init((RNE_FontInterface) {
             .measure = measure,
             .query = query,
+            .get_atlas = get_atlas,
+            .get_ascent = get_ascent,
         }, (RNE_StyleStack) {
             .size = {
                 [RNE_AXIS_HORIZONTAL] = {
@@ -470,23 +500,10 @@ i32 main(void) {
         // Render
         RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
 
-        // RNE_DrawCmdBuffer buffer = rne_draw_buffer_begin(frame_arena);
-        // rne_draw_scissor(&buffer, (RNE_DrawScissor) {
-        //         .pos = sp_v2s(0.0f),
-        //         .size = sp_v2s(256.0f),
-        //     });
-
-        // rne_draw_circle_filled(&buffer, (RNE_DrawCircle) {
-        //         .pos = sp_v2s(256.0f),
-        //         .radius = 32.0f,
-        //         .color = SP_COLOR_GREEN,
-        //         .segments = 32,
-        //     });
-
         glViewport(0, 0, screen_size.x, screen_size.y);
+        glScissor(0, 0, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
-        glScissor(0, 0, screen_size.x, screen_size.y);
 
         RNE_BatchCmd batch;
         RNE_TessellationState state = {0};
@@ -494,32 +511,34 @@ i32 main(void) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nr.ibo);
         glUseProgram(nr.shader);
         new_renderer_update_projection(&nr, screen_size);
-
-        u32 batch_count = 0;
-        u32 total_draw_count = 0;
+        RNE_Handle textures[8] = {0};
         while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
                 .arena = rne_get_arena(),
                 .vertex_buffer = nr.vertex_buffer,
                 .vertex_capacity = sp_arrlen(nr.vertex_buffer),
                 .index_buffer = nr.index_buffer,
                 .index_capacity = sp_arrlen(nr.index_buffer),
+                .texture_buffer = textures,
+                .texture_capacity = sp_arrlen(textures),
+                .null_texture = {
+                    .id = nr.null_texture,
+                },
             }, &state)).render_cmds != NULL) {
+            // Set up OpenGL state
             new_renderer_update_buffers(&nr, batch.vertex_count, batch.index_count);
-            u32 draw_count = 0;
+            for (u32 i = 0; i < batch.texture_count; i++) {
+                glBindTextureUnit(i, textures[i].id);
+            }
+
+            // Render
             for (RNE_RenderCmd* cmd = batch.render_cmds; cmd != NULL; cmd = cmd->next) {
                 glScissor((i32) cmd->scissor.pos.x,
                         (i32) (screen_size.y - cmd->scissor.size.y - cmd->scissor.pos.y),
                         cmd->scissor.size.x,
                         cmd->scissor.size.y);
                 glDrawElements(GL_TRIANGLES, cmd->index_count, GL_UNSIGNED_SHORT, (const void*) (u64) cmd->start_offset_bytes);
-                draw_count++;
             }
-            total_draw_count += draw_count;
-            batch_count++;
-            sp_debug("draw_count = %d", draw_count);
         }
-        sp_debug("batch_count = %d", batch_count);
-        sp_debug("total_draw_count = %d", total_draw_count);
 
         glfwSwapBuffers(window);
     }

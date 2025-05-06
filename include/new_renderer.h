@@ -9,6 +9,7 @@ struct NewRenderer {
     u32 vbo;
     u32 ibo;
     u32 shader;
+    u32 null_texture;
 
     RNE_Vertex vertex_buffer[4096];
     u16 index_buffer[4096];

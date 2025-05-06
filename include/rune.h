@@ -22,11 +22,15 @@ struct RNE_Glyph {
 
 typedef SP_Vec2 (*RNE_TextMeasureFunc)(RNE_Handle font, SP_Str text, f32 height);
 typedef RNE_Glyph (*RNE_FontQueryFunc)(RNE_Handle font, u32 codepoint, f32 height);
+typedef RNE_Handle (*RNE_FontGetAtlas)(RNE_Handle font, f32 height);
+typedef f32 (*RNE_FontGetAscent)(RNE_Handle font, f32 height);
 
 typedef struct RNE_FontInterface RNE_FontInterface;
 struct RNE_FontInterface {
     RNE_TextMeasureFunc measure;
     RNE_FontQueryFunc query;
+    RNE_FontGetAtlas get_atlas;
+    RNE_FontGetAscent get_ascent;
 };
 
 // -- Drawing ------------------------------------------------------------------
@@ -36,6 +40,7 @@ typedef enum RNE_DrawCmdType {
     RNE_DRAW_CMD_TYPE_ARC,
     RNE_DRAW_CMD_TYPE_CIRCLE,
     RNE_DRAW_CMD_TYPE_RECT,
+    RNE_DRAW_CMD_TYPE_IMAGE,
     RNE_DRAW_CMD_TYPE_TEXT,
     RNE_DRAW_CMD_TYPE_SCISSOR,
 } RNE_DrawCmdType;
@@ -84,6 +89,17 @@ struct RNE_DrawText {
     f32 font_size;
 };
 
+typedef struct RNE_DrawImage RNE_DrawImage;
+struct RNE_DrawImage {
+    RNE_Handle texture_handle;
+    SP_Vec2 pos;
+    SP_Vec2 size;
+    SP_Color color;
+    // [0] = Top left
+    // [1] = Bottom right
+    SP_Vec2 uv[2];
+};
+
 typedef struct RNE_DrawScissor RNE_DrawScissor;
 struct RNE_DrawScissor {
     SP_Vec2 pos;
@@ -93,6 +109,7 @@ struct RNE_DrawScissor {
 typedef struct RNE_DrawCmd RNE_DrawCmd;
 struct RNE_DrawCmd {
     RNE_DrawCmd* next;
+    RNE_DrawCmd* prev;
 
     RNE_DrawCmdType type;
     f32 thickness;
@@ -104,6 +121,7 @@ struct RNE_DrawCmd {
         RNE_DrawCircle circle;
         RNE_DrawRect rect;
         RNE_DrawText text;
+        RNE_DrawImage image;
         RNE_DrawScissor scissor;
     } data;
 };
@@ -125,6 +143,7 @@ extern void rne_draw_circle_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawCircle cir
 extern void rne_draw_circle_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawCircle circle, f32 thickness);
 extern void rne_draw_rect_filled(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect);
 extern void rne_draw_rect_stroke(RNE_DrawCmdBuffer* buffer, RNE_DrawRect rect, f32 thickness);
+extern void rne_draw_image(RNE_DrawCmdBuffer* buffer, RNE_DrawImage image);
 extern void rne_draw_text(RNE_DrawCmdBuffer* buffer, RNE_DrawText text);
 extern void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor);
 
@@ -135,6 +154,7 @@ struct RNE_Vertex {
     SP_Vec2 pos;
     SP_Vec2 uv;
     SP_Color color;
+    u32 texture_index;
 };
 
 typedef struct RNE_TessellationConfig RNE_TessellationConfig;
@@ -146,6 +166,10 @@ struct RNE_TessellationConfig {
 
     u16* index_buffer;
     u32 index_capacity;
+
+    RNE_Handle* texture_buffer;
+    u32 texture_capacity;
+    RNE_Handle null_texture;
 };
 
 typedef struct RNE_RenderCmd RNE_RenderCmd;
@@ -161,6 +185,7 @@ typedef struct RNE_BatchCmd RNE_BatchCmd;
 struct RNE_BatchCmd {
     u32 vertex_count;
     u32 index_count;
+    u32 texture_count;
     RNE_RenderCmd* render_cmds;
 };
 

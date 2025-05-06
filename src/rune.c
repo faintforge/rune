@@ -893,11 +893,17 @@ static FattenResult path_fill_convex(const Path* path, FattenConfig config) {
         return (FattenResult) {0};
     }
 
+    // OOM
     u32 needed_vertices = path->point_i;
     u32 needed_indices = (path->point_i - 2) * 3;
-
-    sp_assert(config.vertex_capacity - config.vertex_end >= needed_vertices, "Too many vertices for buffer!");
-    sp_assert(config.index_capacity - config.index_end >= needed_indices, "Too many indices for buffer!");
+    sp_assert(needed_vertices <= config.vertex_capacity, "Vertex buffer too small for object!");
+    sp_assert(needed_indices <= config.index_capacity, "Index buffer too small for object!");
+    if (config.vertex_capacity - config.vertex_end < needed_vertices ||
+        config.index_capacity - config.index_end < needed_indices) {
+        return (FattenResult) {
+            .out_of_memory = true,
+        };
+    }
 
     u32 start_offset = config.vertex_end;
     u32 point_count = path->point_i;
@@ -930,11 +936,17 @@ static FattenResult path_stroke(const Path* path, FattenConfig config, f32 thick
         return (FattenResult) {0};
     }
 
+    // OOM
     u32 needed_vertices = path->point_i * 2;
     u32 needed_indices = closed ? path->point_i * 6 : (path->point_i - 1) * 6;
-
-    sp_assert(config.vertex_capacity - config.vertex_end >= needed_vertices, "Too many vertices for buffer!");
-    sp_assert(config.index_capacity - config.index_end >= needed_indices, "Too many indices for buffer!");
+    sp_assert(needed_vertices <= config.vertex_capacity, "Vertex buffer too small for object!");
+    sp_assert(needed_indices <= config.index_capacity, "Index buffer too small for object!");
+    if (config.vertex_capacity - config.vertex_end < needed_vertices ||
+        config.index_capacity - config.index_end < needed_indices) {
+        return (FattenResult) {
+            .out_of_memory = true,
+        };
+    }
 
     u32 point_count = path->point_i;
     u32 start_offset = config.vertex_end;

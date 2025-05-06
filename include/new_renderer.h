@@ -10,8 +10,8 @@ struct NewRenderer {
     u32 ibo;
     u32 shader;
 
-    RNE_Vertex vertex_buffer[4096];
-    u16 index_buffer[4096];
+    RNE_Vertex vertex_buffer[64];
+    u16 index_buffer[1024];
 };
 
 extern NewRenderer new_renderer_create(void);

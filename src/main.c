@@ -475,6 +475,7 @@ i32 main(void) {
         //         .pos = sp_v2s(0.0f),
         //         .size = sp_v2s(256.0f),
         //     });
+
         // rne_draw_circle_filled(&buffer, (RNE_DrawCircle) {
         //         .pos = sp_v2s(256.0f),
         //         .radius = 32.0f,
@@ -493,6 +494,9 @@ i32 main(void) {
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nr.ibo);
         glUseProgram(nr.shader);
         new_renderer_update_projection(&nr, screen_size);
+
+        u32 batch_count = 0;
+        u32 total_draw_count = 0;
         while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
                 .arena = rne_get_arena(),
                 .vertex_buffer = nr.vertex_buffer,
@@ -501,17 +505,21 @@ i32 main(void) {
                 .index_capacity = sp_arrlen(nr.index_buffer),
             }, &state)).render_cmds != NULL) {
             new_renderer_update_buffers(&nr, batch.vertex_count, batch.index_count);
-            u32 count = 0;
+            u32 draw_count = 0;
             for (RNE_RenderCmd* cmd = batch.render_cmds; cmd != NULL; cmd = cmd->next) {
                 glScissor((i32) cmd->scissor.pos.x,
                         (i32) (screen_size.y - cmd->scissor.size.y - cmd->scissor.pos.y),
                         cmd->scissor.size.x,
                         cmd->scissor.size.y);
                 glDrawElements(GL_TRIANGLES, cmd->index_count, GL_UNSIGNED_SHORT, (const void*) (u64) cmd->start_offset_bytes);
-                count++;
+                draw_count++;
             }
-            sp_debug("Count: %d", count);
+            total_draw_count += draw_count;
+            batch_count++;
+            sp_debug("draw_count = %d", draw_count);
         }
+        sp_debug("batch_count = %d", batch_count);
+        sp_debug("total_draw_count = %d", total_draw_count);
 
         glfwSwapBuffers(window);
     }

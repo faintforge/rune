@@ -9,6 +9,8 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#define EM(value) ((value) * rne_top_font_size())
+
 static SP_Str read_file(SP_Arena* arena, SP_Str filename) {
     const char* cstr_filename = sp_str_to_cstr(arena, filename);
     FILE *fp = fopen(cstr_filename, "rb");
@@ -139,6 +141,16 @@ i32 main(void) {
     SP_Arena* arena = sp_arena_create();
     sp_arena_tag(arena, sp_str_lit("main"));
 
+    // Gruvbox Colors
+    // https://github.com/morhetz/gruvbox
+    const SP_Color GB_BG = sp_color_rgb_hex(0x282828);
+    const SP_Color GB_BG_H = sp_color_rgb_hex(0x1d2021);
+    const SP_Color GB_BG1 = sp_color_rgb_hex(0x3c3836);
+    const SP_Color GB_BG2 = sp_color_rgb_hex(0x504945);
+    const SP_Color GB_FG = sp_color_rgb_hex(0xebdbb2);
+    const SP_Color GB_GREEN = sp_color_rgb_hex(0xb8bb26);
+    const SP_Color GB_RED = sp_color_rgb_hex(0xfb4934);
+
     // Create window
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
@@ -217,11 +229,37 @@ i32 main(void) {
 
         rne_begin(screen_size, mouse);
 
-        rne_next_width(RNE_SIZE_TEXT(1.0f));
-        rne_next_height(RNE_SIZE_TEXT(1.0f));
-        rne_next_fg(sp_color_hsv(sp_os_get_time() * 180.0f, 0.75f, 1.0f));
-        rne_next_font_size(64.0f);
-        rne_widget(sp_str_lit("Hello, world!"), RNE_WIDGET_FLAG_DRAW_TEXT);
+        rne_next_width(RNE_SIZE_CHILDREN(1.0f));
+        rne_next_height(RNE_SIZE_CHILDREN(1.0f));
+        RNE_Widget* column = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_NONE);
+        rne_push_parent(column);
+        {
+            rne_next_width(RNE_SIZE_TEXT(1.0f));
+            rne_next_height(RNE_SIZE_TEXT(1.0f));
+            rne_next_fg(sp_color_hsv(sp_os_get_time() * 180.0f, 0.75f, 1.0f));
+            rne_next_font_size(64.0f);
+            rne_widget(sp_str_lit("Hello, world!"), RNE_WIDGET_FLAG_DRAW_TEXT);
+
+            rne_next_bg(GB_BG);
+            rne_next_fg(GB_GREEN);
+            rne_push_font_size(32.0f);
+            rne_next_width(RNE_SIZE_PIXELS(EM(6.0f), 1.0f));
+            rne_next_height(RNE_SIZE_PIXELS(EM(2.0f), 1.0f));
+            rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
+            RNE_Widget* interactive = rne_widget(sp_str_lit("Interactive!"), RNE_WIDGET_FLAG_DRAW_TEXT |
+                    RNE_WIDGET_FLAG_DRAW_BACKGROUND |
+                    RNE_WIDGET_FLAG_INTERACTIVE);
+            rne_pop_font_size();
+
+            RNE_Signal signal = rne_signal(interactive);
+            if (signal.hovered) {
+                interactive->fg = GB_RED;
+                if (signal.pressed) { interactive->bg = GB_BG_H; }
+                if (signal.just_pressed) { sp_info("Pressed"); }
+                if (signal.just_released) { sp_info("Released"); }
+            }
+        }
+        rne_pop_parent();
 
         rne_end();
 

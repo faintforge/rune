@@ -535,7 +535,8 @@ RNE_Signal rne_signal(RNE_Widget* widget) {
         ctx.focused_widget = widget;
     }
     b8 focused = widget == ctx.focused_widget;
-    b8 clicked = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed;
+    b8 just_pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed;
+    b8 just_released = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_released;
     SP_Vec2 drag = sp_v2s(0.0f);
     if (focused) {
         drag = ctx.mouse.pos_delta;
@@ -556,7 +557,8 @@ RNE_Signal rne_signal(RNE_Widget* widget) {
     RNE_Signal signal = {
         .hovered = hovered,
         .pressed = pressed,
-        .clicked = clicked,
+        .just_pressed = just_pressed,
+        .just_released = just_released,
         .focused = focused,
         .drag = drag,
         .scroll = scroll,

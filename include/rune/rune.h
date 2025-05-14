@@ -235,7 +235,8 @@ typedef struct RNE_Signal RNE_Signal;
 struct RNE_Signal {
     b8 hovered;
     b8 pressed;
-    b8 clicked;
+    b8 just_pressed;
+    b8 just_released;
     b8 focused;
     SP_Vec2 drag;
     f32 scroll;

@@ -55,6 +55,29 @@ void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measu
     // generate_header_functions();
 }
 
+static void process_mouse(RNE_Mouse mouse) {
+    RNE_InternalMouse old = ctx.mouse;
+
+    for (u8 i = 0; i < RNE_MOUSE_BUTTON_COUNT; i++) {
+        if (mouse.buttons[i] && !old.buttons[i].down) {
+            old.buttons[i].first_frame_pressed = true;
+        } else if (!mouse.buttons[i] && old.buttons[i].down) {
+            old.buttons[i].first_frame_released = true;
+        } else {
+            old.buttons[i].first_frame_released = false;
+            old.buttons[i].first_frame_pressed = false;
+        }
+        old.buttons[i].down = mouse.buttons[i];
+    }
+
+    SP_Vec2 pos_delta = sp_v2_sub(mouse.pos, old.pos);
+    old.pos_delta = pos_delta;
+    old.pos = mouse.pos;
+    old.scroll = mouse.scroll;
+
+    ctx.mouse = old;
+}
+
 void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     SP_Arena* arena = rne_get_arena();
     sp_arena_clear(arena);
@@ -75,8 +98,9 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
         },
         .flags = RNE_WIDGET_FLAG_FLOATING,
     };
-    ctx.mouse = mouse;
-    if (!ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].pressed) {
+
+    process_mouse(mouse);
+    if (!ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down) {
         ctx.focused_widget = NULL;
     }
 
@@ -506,12 +530,12 @@ RNE_Signal rne_signal(RNE_Widget* widget) {
     f32 bottom = top + widget->computed_size.y;
 
     b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
-    b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].pressed;
+    b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
     if (pressed && ctx.focused_widget == NULL) {
         ctx.focused_widget = widget;
     }
     b8 focused = widget == ctx.focused_widget;
-    b8 clicked = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].clicked;
+    b8 clicked = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed;
     SP_Vec2 drag = sp_v2s(0.0f);
     if (focused) {
         drag = ctx.mouse.pos_delta;

@@ -27,6 +27,18 @@
 LIST_STYLE_STACKS
 #undef X
 
+typedef struct RNE_InternalMouse RNE_InternalMouse;
+struct RNE_InternalMouse {
+    struct {
+        b8 first_frame_pressed;
+        b8 first_frame_released;
+        b8 down;
+    } buttons[RNE_MOUSE_BUTTON_COUNT];
+    SP_Vec2 pos;
+    SP_Vec2 pos_delta;
+    f32 scroll;
+};
+
 #define X(name_upper, name_lower, type) RNE_##name_upper##Node* name_lower##_stack;
 typedef struct RNE_Context RNE_Context;
 struct RNE_Context {
@@ -40,7 +52,7 @@ struct RNE_Context {
     RNE_Widget* widget_free_stack;
 
     RNE_Widget* focused_widget;
-    RNE_Mouse mouse;
+    RNE_InternalMouse mouse;
 
     RNE_TextMeasureFunc text_measure;
 

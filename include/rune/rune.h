@@ -226,12 +226,8 @@ typedef enum RNE_MouseButton {
 
 typedef struct RNE_Mouse RNE_Mouse;
 struct RNE_Mouse {
-    struct {
-        b8 pressed;
-        b8 clicked;
-    } buttons[RNE_MOUSE_BUTTON_COUNT];
+    b8 buttons[RNE_MOUSE_BUTTON_COUNT];
     SP_Vec2 pos;
-    SP_Vec2 pos_delta;
     f32 scroll;
 };
 

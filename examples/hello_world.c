@@ -30,38 +30,33 @@ static SP_Str read_file(SP_Arena* arena, SP_Str filename) {
 
 static RNE_Mouse mouse = {0};
 static void reset_mouse(void) {
-    mouse.pos_delta = sp_v2s(0.0f);
     mouse.scroll = 0.0f;
-    for (RNE_MouseButton btn = 0; btn < RNE_MOUSE_BUTTON_COUNT; btn++) {
-        mouse.buttons[btn].clicked = false;
-    }
 }
 
 static void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
+    (void) window;
+    (void) mods;
     switch (button) {
         case GLFW_MOUSE_BUTTON_1:
-            mouse.buttons[RNE_MOUSE_BUTTON_LEFT].pressed = action;
-            mouse.buttons[RNE_MOUSE_BUTTON_LEFT].clicked = action;
+            mouse.buttons[RNE_MOUSE_BUTTON_LEFT] = action;
             break;
         case GLFW_MOUSE_BUTTON_2:
-            mouse.buttons[RNE_MOUSE_BUTTON_RIGHT].pressed = action;
-            mouse.buttons[RNE_MOUSE_BUTTON_RIGHT].clicked = action;
+            mouse.buttons[RNE_MOUSE_BUTTON_RIGHT] = action;
             break;
         case GLFW_MOUSE_BUTTON_3:
-            mouse.buttons[RNE_MOUSE_BUTTON_MIDDLE].pressed = action;
-            mouse.buttons[RNE_MOUSE_BUTTON_MIDDLE].clicked = action;
+            mouse.buttons[RNE_MOUSE_BUTTON_MIDDLE] = action;
             break;
     }
 }
 
 static void cursor_pos_callback(GLFWwindow* window, double xpos, double ypos) {
-    SP_Vec2 pos = sp_v2(xpos, ypos);
-    SP_Vec2 delta = sp_v2_sub(pos, mouse.pos);
-    mouse.pos = pos;
-    mouse.pos_delta = sp_v2_add(mouse.pos_delta, delta);
+    (void) window;
+    mouse.pos = sp_v2(xpos, ypos);
 }
 
 static void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
+    (void) window;
+    (void) xoffset;
     mouse.scroll += yoffset;
 }
 

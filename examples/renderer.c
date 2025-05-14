@@ -1,9 +1,9 @@
-#include "new_renderer.h"
+#include "renderer.h"
 
 #include <glad/gl.h>
 
-NewRenderer new_renderer_create(void) {
-    NewRenderer renderer = {0};
+Renderer renderer_create(void) {
+    Renderer renderer = {0};
 
     // Vertex buffer
     u64 vert_size = sizeof(renderer.vertex_buffer);
@@ -124,7 +124,7 @@ NewRenderer new_renderer_create(void) {
     return renderer;
 }
 
-void new_renderer_destroy(NewRenderer* renderer) {
+void renderer_destroy(Renderer* renderer) {
     glDeleteVertexArrays(1, &renderer->vao);
     glDeleteBuffers(1, &renderer->vbo);
     glDeleteBuffers(1, &renderer->ibo);
@@ -132,7 +132,7 @@ void new_renderer_destroy(NewRenderer* renderer) {
     glDeleteTextures(1, &renderer->null_texture);
 }
 
-void new_renderer_update_buffers(NewRenderer* renderer, u32 vertex_count, u32 index_count) {
+void renderer_update_buffers(Renderer* renderer, u32 vertex_count, u32 index_count) {
     glBindBuffer(GL_ARRAY_BUFFER, renderer->vbo);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(RNE_Vertex) * vertex_count, renderer->vertex_buffer);
 
@@ -140,7 +140,7 @@ void new_renderer_update_buffers(NewRenderer* renderer, u32 vertex_count, u32 in
     glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, sizeof(u16) * index_count, renderer->index_buffer);
 }
 
-void new_renderer_update_projection(NewRenderer* renderer, SP_Ivec2 screen_size) {
+void renderer_update_projection(Renderer* renderer, SP_Ivec2 screen_size) {
     f32 zoom = screen_size.y / 2.0f;
     f32 aspect = (f32) screen_size.x / screen_size.y;
     SP_Mat4 projection = sp_m4_ortho_projection(-aspect * zoom, aspect * zoom, -zoom, zoom, 1.0f, -1.0f);

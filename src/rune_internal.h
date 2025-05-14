@@ -1,6 +1,6 @@
 #pragma once
 
-#include "rune.h"
+#include "rune/rune.h"
 
 // Style stacks
 // #define X(name_upper, name_lower, type)

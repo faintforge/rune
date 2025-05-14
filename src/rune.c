@@ -1,7 +1,6 @@
 #include "rune_internal.h"
 #include "spire.h"
 
-#include <math.h>
 #include <stdio.h>
 #include <string.h>
 

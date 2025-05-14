@@ -1,6 +1,7 @@
-#include "rune_font.h"
+#include "rune/rune_font.h"
 #include "spire.h"
 
+#define STB_TRUETYPE_IMPLEMENTATION
 #include <stb_truetype.h>
 
 #include <string.h>
@@ -346,8 +347,6 @@ static void expand_atlas(RNE_Font* font, RNE_SizedFont* sized) {
             u32 glyph_index = y * glyph->bitmap_size.x;
             memcpy(&bitmap[atlas_index], &glyph->bitmap[glyph_index], glyph->bitmap_size.x);
         }
-
-        SP_Vec2 atlas_size = sp_v2(packer.size.x, packer.size.y);
         calculate_uvs(node->pos, node->size, packer.size, glyph->user_glyph.uv);
 
         iter = sp_hm_iter_next(iter);

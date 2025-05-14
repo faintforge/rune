@@ -1,9 +1,8 @@
-#include "rune.h"
-#include "rune_font.h"
-#include "rune_tessellation.h"
+#include "rune/rune.h"
+#include "rune/rune_font.h"
+#include "rune/rune_tessellation.h"
 #include "spire.h"
-
-#include "new_renderer.h"
+#include "renderer.h"
 
 #include <stdio.h>
 
@@ -199,7 +198,7 @@ i32 main(void) {
     f32 fps_timer = 0.0f;
     f32 last = sp_os_get_time();
 
-    NewRenderer nr = new_renderer_create();
+    Renderer nr = renderer_create();
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
@@ -227,7 +226,8 @@ i32 main(void) {
         rne_next_height(RNE_SIZE_TEXT(1.0f));
         rne_next_fg(sp_color_hsv(sp_os_get_time() * 180.0f, 0.75f, 1.0f));
         rne_next_font_size(64.0f);
-        rne_widget(sp_str_lit("Rune"), RNE_WIDGET_FLAG_DRAW_TEXT);
+        rne_widget(sp_str_lit("Hello, world!"), RNE_WIDGET_FLAG_DRAW_TEXT);
+
         rne_end();
 
         // Render
@@ -243,7 +243,7 @@ i32 main(void) {
         glBindVertexArray(nr.vao);
         glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, nr.ibo);
         glUseProgram(nr.shader);
-        new_renderer_update_projection(&nr, screen_size);
+        renderer_update_projection(&nr, screen_size);
         RNE_Handle textures[8] = {0};
         while ((batch = rne_tessellate(buffer, (RNE_TessellationConfig) {
                 .arena = frame_arena,
@@ -259,7 +259,7 @@ i32 main(void) {
                 },
             }, &state)).render_cmds != NULL) {
             // Set up OpenGL state
-            new_renderer_update_buffers(&nr, batch.vertex_count, batch.index_count);
+            renderer_update_buffers(&nr, batch.vertex_count, batch.index_count);
             for (u32 i = 0; i < batch.texture_count; i++) {
                 glBindTextureUnit(i, textures[i].id);
             }

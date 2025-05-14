@@ -1,30 +1,60 @@
 cmake_minimum_required(VERSION 3.16)
-project(rune LANGUAGES C)
+project(rune VERSION 0.1 LANGUAGES C)
 
-add_subdirectory("spire/")
-add_subdirectory("third_party/glad/")
-add_subdirectory("third_party/stb/")
+option(RUNE_BUILD_EXAMPLES "Build examples" false)
+option(BUILD_SHARED_LIBS "Build shared instead of static libraries" false)
+option(RUNE_INCLUDE_FONT "Include font module in build" true)
+option(RUNE_INCLUDE_TESSELLATION "Include tessellation module in build" true)
 
-file(GLOB_RECURSE SOURCE CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c")
-add_executable(${PROJECT_NAME} ${SOURCE})
+add_library(rune STATIC src/rune.c)
 
-target_include_directories(${PROJECT_NAME}
-    PRIVATE "src/"
-    PRIVATE "include/"
+target_include_directories(rune
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    C_STANDARD 99
-    C_STANDARD_REQUIRED false
-    C_EXTENSIONS false
-    EXPORT_COMPILE_COMMANDS true
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin"
+target_compile_features(rune PUBLIC c_std_99)
+target_compile_options(rune
+    PRIVATE
+        $<$<C_COMPILER_ID:GNU,Clang>:-Wall -Wextra>
+        $<$<C_COMPILER_ID:MSVC>:/W4>
 )
 
-target_link_libraries(${PROJECT_NAME} spire stb glad glfw m)
+if (NOT TARGET spire)
+    add_subdirectory(spire)
+endif ()
 
-if (MSVC)
-    add_compile_options("/W4")
-else ()
-    add_compile_options("-Wall -Wextra -Wpedantic")
+target_link_libraries(rune spire)
+
+if (RUNE_INCLUDE_FONT)
+    target_include_directories(rune PRIVATE third_party/stb)
+    target_sources(rune PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/rune_font.c)
+endif ()
+
+if (RUNE_INCLUDE_TESSELLATION)
+    target_sources(rune PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/rune_tessellation.c)
+endif ()
+
+include(GNUInstallDirs)
+
+install(TARGETS rune
+    EXPORT runeTargets
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+
+install(EXPORT runeTargets
+    FILE runeTargets.cmake
+    NAMESPACE rune::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/rune
+)
+
+if (RUNE_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif ()

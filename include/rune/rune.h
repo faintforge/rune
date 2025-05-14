@@ -50,7 +50,7 @@ typedef struct RNE_DrawRect RNE_DrawRect;
 struct RNE_DrawRect {
     SP_Vec2 pos;
     SP_Vec2 size;
-    f32 corner_radius;
+    SP_Vec4 corner_radius;
     u32 corner_segments;
     SP_Color color;
 };
@@ -204,6 +204,7 @@ struct RNE_Widget {
     f32 font_size;
     RNE_Axis flow;
     RNE_TextAlign text_align;
+    SP_Vec4 corner_radius;
 };
 
 typedef struct RNE_StyleStack RNE_StyleStack;
@@ -290,6 +291,7 @@ extern void rne_push_parent(RNE_Widget* value);
 extern void rne_push_fixed_x(f32 value);
 extern void rne_push_fixed_y(f32 value);
 extern void rne_push_text_align(RNE_TextAlign value);
+extern void rne_push_corner_radius(SP_Vec4 value);
 
 extern RNE_Size rne_pop_width(void);
 extern RNE_Size rne_pop_height(void);
@@ -302,6 +304,7 @@ extern RNE_Widget* rne_pop_parent(void);
 extern f32 rne_pop_fixed_x(void);
 extern f32 rne_pop_fixed_y(void);
 extern RNE_TextAlign rne_pop_text_align(void);
+extern SP_Vec4 rne_pop_corner_radius(void);
 
 extern void rne_next_width(RNE_Size value);
 extern void rne_next_height(RNE_Size value);
@@ -314,6 +317,7 @@ extern void rne_next_parent(RNE_Widget* value);
 extern void rne_next_fixed_x(f32 value);
 extern void rne_next_fixed_y(f32 value);
 extern void rne_next_text_align(RNE_TextAlign value);
+extern void rne_next_corner_radius(SP_Vec4 value);
 
 extern RNE_Size rne_top_width(void);
 extern RNE_Size rne_top_height(void);
@@ -326,3 +330,4 @@ extern RNE_Widget* rne_top_parent(void);
 extern f32 rne_top_fixed_x(void);
 extern f32 rne_top_fixed_y(void);
 extern RNE_TextAlign rne_top_text_align(void);
+extern SP_Vec4 rne_top_corner_radius(void);

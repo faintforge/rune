@@ -135,6 +135,16 @@ void atlas_update(RNE_UserData userdata, SP_Ivec2 pos, SP_Ivec2 size, u32 stride
     glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
 }
 
+void draw_border_func(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata) {
+    rne_draw_rect_stroke(buffer, (RNE_DrawRect) {
+            .pos = widget->computed_absolute_position,
+            .size = widget->computed_size,
+            .color = widget->fg,
+            .corner_radius = widget->corner_radius,
+            .corner_segments = 8,
+        }, 2.0f);
+}
+
 i32 main(void) {
     sp_init(SP_CONFIG_DEFAULT);
     glfwInit();
@@ -246,9 +256,11 @@ i32 main(void) {
             rne_next_width(RNE_SIZE_PIXELS(EM(6.0f), 1.0f));
             rne_next_height(RNE_SIZE_PIXELS(EM(2.0f), 1.0f));
             rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
+            rne_next_corner_radius(sp_v4(4.0f, 16.0f, 16.0f, 4.0f));
             RNE_Widget* interactive = rne_widget(sp_str_lit("Interactive!"), RNE_WIDGET_FLAG_DRAW_TEXT |
                     RNE_WIDGET_FLAG_DRAW_BACKGROUND |
                     RNE_WIDGET_FLAG_INTERACTIVE);
+            rne_widget_equip_render_func(interactive, draw_border_func, NULL);
             rne_pop_font_size();
 
             RNE_Signal signal = rne_signal(interactive);

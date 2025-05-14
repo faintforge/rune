@@ -71,30 +71,69 @@ static void push_circle(Path* path, RNE_DrawCircle circle) {
 
 static void push_rect(Path* path, RNE_DrawRect rect) {
     f32 min_side = sp_min(rect.size.x, rect.size.y) / 2.0f;
-    rect.corner_radius = sp_clamp(rect.corner_radius, 0.0f, min_side);
-
-    // TODO: UVs
-    if (rect.corner_radius == 0.0f) {
-        // Top left
-        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x, rect.pos.y), .color = rect.color });
-        // Bottom left
-        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x, rect.pos.y + rect.size.y), .color = rect.color });
-        // Bottom right
-        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y), .color = rect.color });
-        // Top right
-        push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y), .color = rect.color });
-        return;
+    for (u8 i = 0; i < sp_arrlen(rect.corner_radius.elements); i++) {
+        rect.corner_radius.elements[i] = sp_clamp(rect.corner_radius.elements[i], 0.0f, min_side);
     }
 
-    f32 inner_left   = rect.pos.x + rect.corner_radius;
-    f32 inner_right  = rect.pos.x + rect.size.x - rect.corner_radius;
-    f32 inner_bottom = rect.pos.y + rect.size.y - rect.corner_radius;
-    f32 inner_top    = rect.pos.y + rect.corner_radius;
+    // if (rect.corner_radius == 0.0f) {
+    //     // Top left
+    //     push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x, rect.pos.y), .color = rect.color });
+    //     // Bottom left
+    //     push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x, rect.pos.y + rect.size.y), .color = rect.color });
+    //     // Bottom right
+    //     push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y + rect.size.y), .color = rect.color });
+    //     // Top right
+    //     push_point(path, (RNE_Vertex) { .pos = sp_v2(rect.pos.x + rect.size.x, rect.pos.y), .color = rect.color });
+    //     return;
+    // }
+
+    // f32 radius = rect.corner_radius.x;
+    // f32 inner_left   = rect.pos.x + radius;
+    // f32 inner_right  = rect.pos.x + rect.size.x - radius;
+    // f32 inner_bottom = rect.pos.y + rect.size.y - radius;
+    // f32 inner_top    = rect.pos.y + radius;
+
+    // // Top left
+    // push_arc(path, (RNE_DrawArc) {
+    //         .pos = sp_v2(inner_left, inner_top),
+    //         .radius = radius,
+    //         .start_angle = PI / 2.0f,
+    //         .end_angle = PI,
+    //         .color = rect.color,
+    //         .segments = rect.corner_segments,
+    //     });
+    // // Bottom left
+    // push_arc(path, (RNE_DrawArc) {
+    //         .pos = sp_v2(inner_left, inner_bottom),
+    //         .radius = radius,
+    //         .start_angle = PI,
+    //         .end_angle = 3.0f * PI / 2.0f,
+    //         .color = rect.color,
+    //         .segments = rect.corner_segments,
+    //     });
+    // // Bottom right
+    // push_arc(path, (RNE_DrawArc) {
+    //         .pos = sp_v2(inner_right, inner_bottom),
+    //         .radius = radius,
+    //         .start_angle = -PI / 2.0f,
+    //         .end_angle = 0.0f,
+    //         .color = rect.color,
+    //         .segments = rect.corner_segments,
+    //     });
+    // // Top right
+    // push_arc(path, (RNE_DrawArc) {
+    //         .pos = sp_v2(inner_right, inner_top),
+    //         .radius = radius,
+    //         .start_angle = 0.0f,
+    //         .end_angle = PI / 2.0f,
+    //         .color = rect.color,
+    //         .segments = rect.corner_segments,
+    //     });
 
     // Top left
     push_arc(path, (RNE_DrawArc) {
-            .pos = sp_v2(inner_left, inner_top),
-            .radius = rect.corner_radius,
+            .pos = sp_v2(rect.pos.x + rect.corner_radius.x, rect.pos.y + rect.corner_radius.x),
+            .radius = rect.corner_radius.x,
             .start_angle = PI / 2.0f,
             .end_angle = PI,
             .color = rect.color,
@@ -102,8 +141,8 @@ static void push_rect(Path* path, RNE_DrawRect rect) {
         });
     // Bottom left
     push_arc(path, (RNE_DrawArc) {
-            .pos = sp_v2(inner_left, inner_bottom),
-            .radius = rect.corner_radius,
+            .pos = sp_v2(rect.pos.x + rect.corner_radius.z, rect.pos.y + rect.size.y - rect.corner_radius.z),
+            .radius = rect.corner_radius.z,
             .start_angle = PI,
             .end_angle = 3.0f * PI / 2.0f,
             .color = rect.color,
@@ -111,8 +150,8 @@ static void push_rect(Path* path, RNE_DrawRect rect) {
         });
     // Bottom right
     push_arc(path, (RNE_DrawArc) {
-            .pos = sp_v2(inner_right, inner_bottom),
-            .radius = rect.corner_radius,
+            .pos = sp_v2(rect.pos.x + rect.size.x - rect.corner_radius.w, rect.pos.y + rect.size.y - rect.corner_radius.w),
+            .radius = rect.corner_radius.w,
             .start_angle = -PI / 2.0f,
             .end_angle = 0.0f,
             .color = rect.color,
@@ -120,8 +159,8 @@ static void push_rect(Path* path, RNE_DrawRect rect) {
         });
     // Top right
     push_arc(path, (RNE_DrawArc) {
-            .pos = sp_v2(inner_right, inner_top),
-            .radius = rect.corner_radius,
+            .pos = sp_v2(rect.pos.x + rect.size.x - rect.corner_radius.y, rect.pos.y + rect.corner_radius.y),
+            .radius = rect.corner_radius.y,
             .start_angle = 0.0f,
             .end_angle = PI / 2.0f,
             .color = rect.color,

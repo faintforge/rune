@@ -1,3 +1,4 @@
+#include "rune/rune.h"
 #include "rune_internal.h"
 #include "spire.h"
 
@@ -115,6 +116,7 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     rne_push_fixed_x(0.0f);
     rne_push_fixed_y(0.0f);
     rne_push_text_align(ctx.default_style_stack.text_align);
+    rne_push_corner_radius(sp_v4s(0.0f));
 }
 
 static void build_fixed_sizes(RNE_Widget* widget) {
@@ -338,6 +340,8 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
                 .pos = widget->computed_absolute_position,
                 .size = widget->computed_size,
                 .color = widget->bg,
+                .corner_radius = widget->corner_radius,
+                .corner_segments = 8,
             });
     }
 
@@ -496,6 +500,7 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
         .font_size = rne_top_font_size(),
         .flow = rne_top_flow(),
         .text_align = rne_top_text_align(),
+        .corner_radius = rne_top_corner_radius(),
     };
 
     if (flags & RNE_WIDGET_FLAG_FLOATING_X) {

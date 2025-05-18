@@ -55,7 +55,7 @@ void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measu
 
     ctx.widget_map = sp_hm_new(sp_hm_desc_str(ctx.arena, 4096, RNE_Widget*));
 
-    generate_header_functions();
+    // generate_header_functions();
 }
 
 static void process_mouse(RNE_Mouse mouse) {

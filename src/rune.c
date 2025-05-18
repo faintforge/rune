@@ -7,7 +7,9 @@
 
 RNE_Context ctx = {0};
 
-static void generate_header_functions(void) {
+// Prints out header code for managing widget style stacks (push, pop, next and
+// top) to stdout.
+void generate_header_functions(void) {
     // Push
     #define X(name_upper, name_lower, type) \
         printf("extern void rne_push_%s(%s value);\n", #name_lower, #type);
@@ -53,7 +55,7 @@ void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measu
 
     ctx.widget_map = sp_hm_new(sp_hm_desc_str(ctx.arena, 4096, RNE_Widget*));
 
-    // generate_header_functions();
+    generate_header_functions();
 }
 
 static void process_mouse(RNE_Mouse mouse) {
@@ -117,6 +119,14 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     rne_push_fixed_y(0.0f);
     rne_push_text_align(ctx.default_style_stack.text_align);
     rne_push_corner_radius(sp_v4s(0.0f));
+    rne_push_padding(sp_v4s(0.0f));
+}
+
+static void add_padding(RNE_Widget* widget) {
+    SP_Vec4 padding = widget->padding;
+    SP_Vec2 additional_size = sp_v2(padding.x + padding.z, padding.y + padding.w);
+    widget->computed_outer_size = sp_v2_add(widget->computed_inner_size, additional_size);
+    widget->computed_inner_position = sp_v2(padding.x, padding.y);
 }
 
 static void build_fixed_sizes(RNE_Widget* widget) {
@@ -135,17 +145,18 @@ static void build_fixed_sizes(RNE_Widget* widget) {
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
         switch (widget->size[i].kind) {
             case RNE_SIZE_KIND_PIXELS:
-                widget->computed_size.elements[i] = widget->size[i].value;
+                widget->computed_inner_size.elements[i] = widget->size[i].value;
                 break;
             case RNE_SIZE_KIND_TEXT:
-                widget->computed_size.elements[i] = text_size.elements[i];
+                widget->computed_inner_size.elements[i] = text_size.elements[i];
                 break;
             default:
                 break;
         }
     }
 
-    // Bredth-first
+    add_padding(widget);
+
     build_fixed_sizes(widget->next);
     build_fixed_sizes(widget->child_first);
 }
@@ -154,8 +165,8 @@ static SP_Vec2 sum_child_size(RNE_Widget* widget) {
     SP_Vec2 child_sum = sp_v2s(0.0f);
     for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
         if (!(curr_child->flags & RNE_WIDGET_FLAG_FLOATING_X << widget->flow)) {
-            child_sum.elements[widget->flow] += curr_child->computed_size.elements[widget->flow];
-            child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_size.elements[!widget->flow]);
+            child_sum.elements[widget->flow] += curr_child->computed_outer_size.elements[widget->flow];
+            child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_outer_size.elements[!widget->flow]);
         }
     }
     return child_sum;
@@ -166,7 +177,6 @@ static void build_child_sizes(RNE_Widget* widget) {
         return;
     }
 
-    // Depth-first
     build_child_sizes(widget->child_first);
     build_child_sizes(widget->next);
 
@@ -180,9 +190,10 @@ static void build_child_sizes(RNE_Widget* widget) {
 
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
         if (widget->size[i].kind == RNE_SIZE_KIND_CHILDREN) {
-            widget->computed_size.elements[i] = child_sum.elements[i];
+            widget->computed_inner_size.elements[i] = child_sum.elements[i];
         }
     }
+    add_padding(widget);
 }
 
 static void build_parent_sizes(RNE_Widget* widget) {
@@ -193,11 +204,11 @@ static void build_parent_sizes(RNE_Widget* widget) {
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
         if (widget->size[i].kind == RNE_SIZE_KIND_PARENT) {
             sp_assert(widget->parent != NULL, "Only (root-container) should have a NULL parent.");
-            widget->computed_size.elements[i] = widget->parent->computed_size.elements[i] * widget->size[i].value;
+            widget->computed_inner_size.elements[i] = widget->parent->computed_inner_size.elements[i] * widget->size[i].value;
         }
     }
+    add_padding(widget);
 
-    // Bredth-first
     build_parent_sizes(widget->child_first);
     build_parent_sizes(widget->next);
 }
@@ -207,7 +218,6 @@ static void solve_size_violations(RNE_Widget* widget) {
         return;
     }
 
-    // Depth-first
     solve_size_violations(widget->next);
     solve_size_violations(widget->child_first);
 
@@ -217,29 +227,31 @@ static void solve_size_violations(RNE_Widget* widget) {
             continue;
         }
 
-        f32 violation_amount = child_sum.elements[i] - widget->computed_size.elements[i];
+        f32 total_violation_amount = child_sum.elements[i] - widget->computed_outer_size.elements[i];
+        f32 mutable_violation_amount = child_sum.elements[i] - widget->computed_inner_size.elements[i];
 
         // Violation
-        if (violation_amount > 0.0f) {
+        if (mutable_violation_amount > 0.0f) {
             f32 total_budget = 0.0f;
             for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-                total_budget += curr_child->computed_size.elements[i] * (1.0f - curr_child->size[i].strictness);
+                total_budget += curr_child->computed_inner_size.elements[i] * (1.0f - curr_child->size[i].strictness);
             }
 
-            if (total_budget < violation_amount) {
-                sp_debug("%.*s - violation = %f, child_sum = %f, widget_size = %f",
-                        widget->id.len,
-                        widget->id.data,
-                        violation_amount,
-                        child_sum.elements[i],
-                        widget->computed_size.elements[i]);
-                sp_warn("Widget '%.*s' has a sizing violation of %.0f pixels on the %s-axis.", widget->id.len, widget->id.data, violation_amount - total_budget, i ? "y" : "x");
+            if (total_budget < total_violation_amount) {
+                // sp_debug("%.*s - violation = %f, child_sum = %f, widget_size = %f",
+                //         widget->id.len,
+                //         widget->id.data,
+                //         violation_amount,
+                //         child_sum.elements[i],
+                //         widget->computed_inner_size.elements[i]);
+                sp_warn("Widget '%.*s' has a sizing violation of %.0f pixels on the %s-axis.", widget->id.len, widget->id.data, total_violation_amount - total_budget, i ? "y" : "x");
             }
 
             for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-                f32 child_budget = curr_child->computed_size.elements[i] * (1.0f - curr_child->size[i].strictness);
-                curr_child->computed_size.elements[i] -= child_budget * (violation_amount / total_budget);
-                curr_child->computed_size.elements[i] = floorf(curr_child->computed_size.elements[i]);
+                f32 child_budget = curr_child->computed_inner_size.elements[i] * (1.0f - curr_child->size[i].strictness);
+                curr_child->computed_inner_size.elements[i] -= child_budget * (mutable_violation_amount / total_budget);
+                curr_child->computed_inner_size.elements[i] = floorf(curr_child->computed_inner_size.elements[i]);
+                add_padding(curr_child);
             }
         }
 
@@ -272,14 +284,15 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
                 widget->computed_absolute_position.elements[axis] = parent->computed_absolute_position.elements[axis] + relative_position.elements[axis] + parent->view_offset.elements[axis];
                 RNE_Axis flow = widget->parent->flow;
                 if (flow == axis) {
-                    relative_position.elements[flow] += widget->computed_size.elements[flow];
+                    relative_position.elements[flow] += widget->computed_outer_size.elements[flow];
                 }
             }
         }
     }
 
     build_positions(widget->next, relative_position);
-    build_positions(widget->child_first, sp_v2s(0.0f));
+    // build_positions(widget->child_first, sp_v2s(0.0f));
+    build_positions(widget->child_first, widget->computed_inner_position);
 }
 
 void rne_end(void) {
@@ -288,6 +301,7 @@ void rne_end(void) {
     build_fixed_sizes(&ctx.container);
     build_child_sizes(&ctx.container);
     build_parent_sizes(&ctx.container);
+    // build_padding(&ctx.container);
     solve_size_violations(&ctx.container);
     assign_child_size_sum(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));
@@ -330,7 +344,7 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     if (widget->flags & RNE_WIDGET_FLAG_CLIP) {
         rne_draw_scissor(buffer, (RNE_DrawScissor) {
                 .pos = widget->computed_absolute_position,
-                .size = widget->computed_size,
+                .size = widget->computed_outer_size,
             });
         reset_scissor = true;
     }
@@ -338,7 +352,7 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     if (widget->flags & RNE_WIDGET_FLAG_DRAW_BACKGROUND) {
         rne_draw_rect_filled(buffer, (RNE_DrawRect) {
                 .pos = widget->computed_absolute_position,
-                .size = widget->computed_size,
+                .size = widget->computed_outer_size,
                 .color = widget->bg,
                 .corner_radius = widget->corner_radius,
                 .corner_segments = 8,
@@ -346,23 +360,23 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     }
 
     if (widget->flags & RNE_WIDGET_FLAG_DRAW_TEXT) {
-        SP_Vec2 pos = widget->computed_absolute_position;
+        SP_Vec2 pos = sp_v2_add(widget->computed_absolute_position, widget->computed_inner_position);
         SP_Vec2 text_size = ctx.text_measure(widget->font, widget->text, widget->font_size);
         switch (widget->text_align) {
             case RNE_TEXT_ALIGN_LEFT:
                 break;
             case RNE_TEXT_ALIGN_CENTER: {
-                pos.x += widget->computed_size.x / 2.0f;
+                pos.x += widget->computed_inner_size.x / 2.0f;
                 pos.x -= text_size.x / 2.0f;
             } break;
             case RNE_TEXT_ALIGN_RIGHT: {
-                pos.x += widget->computed_size.x;
+                pos.x += widget->computed_inner_size.x;
                 pos.x -= text_size.x;
             } break;
         }
 
         // Center text vertically
-        pos.y += widget->computed_size.y / 2.0f;
+        pos.y += widget->computed_inner_size.y / 2.0f;
         pos.y -= text_size.y / 2.0f;
 
         rne_draw_text(buffer, (RNE_DrawText) {
@@ -490,7 +504,8 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
 
         // Retain possible state from the last frame
         .computed_absolute_position = widget->computed_absolute_position,
-        .computed_size = widget->computed_size,
+        .computed_inner_size = widget->computed_inner_size,
+        .computed_outer_size = widget->computed_outer_size,
         .view_offset = widget->view_offset,
         .child_size_sum = widget->child_size_sum,
 
@@ -501,6 +516,7 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
         .flow = rne_top_flow(),
         .text_align = rne_top_text_align(),
         .corner_radius = rne_top_corner_radius(),
+        .padding = rne_top_padding(),
     };
 
     if (flags & RNE_WIDGET_FLAG_FLOATING_X) {
@@ -530,9 +546,9 @@ RNE_Signal rne_signal(RNE_Widget* widget) {
 
     SP_Vec2 mpos = ctx.mouse.pos;
     f32 left = widget->computed_absolute_position.x;
-    f32 right = left + widget->computed_size.x;
+    f32 right = left + widget->computed_outer_size.x;
     f32 top = widget->computed_absolute_position.y;
-    f32 bottom = top + widget->computed_size.y;
+    f32 bottom = top + widget->computed_outer_size.y;
 
     b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
     b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
@@ -553,7 +569,7 @@ RNE_Signal rne_signal(RNE_Widget* widget) {
 
     if (widget->flags & RNE_WIDGET_FLAG_VIEW_SCROLL) {
         f32 child_height = widget->child_size_sum.y;
-        f32 view_height = widget->computed_size.y;
+        f32 view_height = widget->computed_inner_size.y;
         f32 scroll_bound = child_height - view_height;
         widget->view_offset.y += scroll * 32.0f;
         widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);

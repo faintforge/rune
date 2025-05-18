@@ -138,7 +138,7 @@ void atlas_update(RNE_UserData userdata, SP_Ivec2 pos, SP_Ivec2 size, u32 stride
 void draw_border_func(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata) {
     rne_draw_rect_stroke(buffer, (RNE_DrawRect) {
             .pos = widget->computed_absolute_position,
-            .size = widget->computed_size,
+            .size = widget->computed_outer_size,
             .color = widget->fg,
             .corner_radius = widget->corner_radius,
             .corner_segments = 8,
@@ -239,22 +239,29 @@ i32 main(void) {
 
         rne_begin(screen_size, mouse);
 
+        rne_next_fixed_x(8.0f);
+        rne_next_fixed_y(8.0f);
         rne_next_width(RNE_SIZE_CHILDREN(1.0f));
         rne_next_height(RNE_SIZE_CHILDREN(1.0f));
-        RNE_Widget* column = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_NONE);
+        rne_next_bg(GB_BG_H);
+        rne_next_padding(sp_v4s(16.0f));
+        rne_next_corner_radius(sp_v4s(16.0f));
+        RNE_Widget* column = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_DRAW_BACKGROUND |
+                RNE_WIDGET_FLAG_FLOATING);
         rne_push_parent(column);
         {
             rne_next_width(RNE_SIZE_TEXT(1.0f));
             rne_next_height(RNE_SIZE_TEXT(1.0f));
             rne_next_fg(sp_color_hsv(sp_os_get_time() * 180.0f, 0.75f, 1.0f));
-            rne_next_font_size(64.0f);
+            rne_next_font_size(48.0f);
             rne_widget(sp_str_lit("Hello, world!"), RNE_WIDGET_FLAG_DRAW_TEXT);
 
             rne_next_bg(GB_BG);
             rne_next_fg(GB_GREEN);
             rne_push_font_size(32.0f);
-            rne_next_width(RNE_SIZE_PIXELS(EM(6.0f), 1.0f));
-            rne_next_height(RNE_SIZE_PIXELS(EM(2.0f), 1.0f));
+            rne_next_width(RNE_SIZE_TEXT(1.0f));
+            rne_next_height(RNE_SIZE_TEXT(1.0f));
+            rne_next_padding(sp_v4(4, 8, 16, 32));
             rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
             rne_next_corner_radius(sp_v4(4.0f, 16.0f, 16.0f, 4.0f));
             RNE_Widget* interactive = rne_widget(sp_str_lit("Interactive!"), RNE_WIDGET_FLAG_DRAW_TEXT |

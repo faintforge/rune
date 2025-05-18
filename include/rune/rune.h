@@ -187,7 +187,13 @@ struct RNE_Widget {
 
     SP_Vec2 computed_relative_position;
     SP_Vec2 computed_absolute_position;
-    SP_Vec2 computed_size;
+    // Offset from outer size to inner size. Used to know where children and
+    // text should be placed.
+    SP_Vec2 computed_inner_position;
+    // Size parent uses (except for sizing violations)
+    SP_Vec2 computed_outer_size;
+    // Size children use
+    SP_Vec2 computed_inner_size;
     SP_Vec2 view_offset;
 
     SP_Str id;
@@ -205,6 +211,7 @@ struct RNE_Widget {
     RNE_Axis flow;
     RNE_TextAlign text_align;
     SP_Vec4 corner_radius;
+    SP_Vec4 padding;
 };
 
 typedef struct RNE_StyleStack RNE_StyleStack;
@@ -292,6 +299,7 @@ extern void rne_push_fixed_x(f32 value);
 extern void rne_push_fixed_y(f32 value);
 extern void rne_push_text_align(RNE_TextAlign value);
 extern void rne_push_corner_radius(SP_Vec4 value);
+extern void rne_push_padding(SP_Vec4 value);
 
 extern RNE_Size rne_pop_width(void);
 extern RNE_Size rne_pop_height(void);
@@ -305,6 +313,7 @@ extern f32 rne_pop_fixed_x(void);
 extern f32 rne_pop_fixed_y(void);
 extern RNE_TextAlign rne_pop_text_align(void);
 extern SP_Vec4 rne_pop_corner_radius(void);
+extern SP_Vec4 rne_pop_padding(void);
 
 extern void rne_next_width(RNE_Size value);
 extern void rne_next_height(RNE_Size value);
@@ -318,6 +327,7 @@ extern void rne_next_fixed_x(f32 value);
 extern void rne_next_fixed_y(f32 value);
 extern void rne_next_text_align(RNE_TextAlign value);
 extern void rne_next_corner_radius(SP_Vec4 value);
+extern void rne_next_padding(SP_Vec4 value);
 
 extern RNE_Size rne_top_width(void);
 extern RNE_Size rne_top_height(void);
@@ -331,3 +341,4 @@ extern f32 rne_top_fixed_x(void);
 extern f32 rne_top_fixed_y(void);
 extern RNE_TextAlign rne_top_text_align(void);
 extern SP_Vec4 rne_top_corner_radius(void);
+extern SP_Vec4 rne_top_padding(void);

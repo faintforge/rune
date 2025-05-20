@@ -13,11 +13,10 @@
     X(FontSize, font_size, f32) \
     X(Flow, flow, RNE_Axis) \
     X(Parent, parent, RNE_Widget*) \
-    X(FixedX, fixed_x, f32) \
-    X(FixedY, fixed_y, f32) \
     X(TextAlign, text_align, RNE_TextAlign) \
     X(CornerRadius, corner_radius, SP_Vec4) \
-    X(Padding, padding, SP_Vec4)
+    X(Padding, padding, SP_Vec4) \
+    X(Offset, offset, SP_Vec2)
 
 #define X(name_upper, name_lower, type) \
     typedef struct RNE_##name_upper##Node RNE_##name_upper##Node; \

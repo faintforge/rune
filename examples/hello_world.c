@@ -9,8 +9,6 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
-#define EM(value) ((value) * rne_top_font_size())
-
 static SP_Str read_file(SP_Arena* arena, SP_Str filename) {
     const char* cstr_filename = sp_str_to_cstr(arena, filename);
     FILE *fp = fopen(cstr_filename, "rb");
@@ -236,18 +234,18 @@ i32 main(void) {
 
         SP_Ivec2 screen_size;
         glfwGetFramebufferSize(window, &screen_size.x, &screen_size.y);
+        SP_Vec2 screen_size_f = sp_iv2_to_v2(screen_size);
 
         rne_begin(screen_size, mouse);
 
-        rne_next_fixed_x(8.0f);
-        rne_next_fixed_y(8.0f);
+        rne_next_offset(sp_v2s(16.0f));
         rne_next_width(RNE_SIZE_CHILDREN(1.0f));
         rne_next_height(RNE_SIZE_CHILDREN(1.0f));
         rne_next_bg(GB_BG_H);
         rne_next_padding(sp_v4s(16.0f));
         rne_next_corner_radius(sp_v4s(16.0f));
         RNE_Widget* column = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_DRAW_BACKGROUND |
-                RNE_WIDGET_FLAG_FLOATING);
+                RNE_WIDGET_FLAG_FIXED);
         rne_push_parent(column);
         {
             rne_next_width(RNE_SIZE_TEXT(1.0f));
@@ -261,9 +259,10 @@ i32 main(void) {
             rne_push_font_size(32.0f);
             rne_next_width(RNE_SIZE_TEXT(1.0f));
             rne_next_height(RNE_SIZE_TEXT(1.0f));
-            rne_next_padding(sp_v4(4, 8, 16, 32));
+            rne_next_padding(sp_v4s(8.0f));
             rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
             rne_next_corner_radius(sp_v4(4.0f, 16.0f, 16.0f, 4.0f));
+            rne_next_offset(sp_v2(8.0f, 16.0f));
             RNE_Widget* interactive = rne_widget(sp_str_lit("Interactive!"), RNE_WIDGET_FLAG_DRAW_TEXT |
                     RNE_WIDGET_FLAG_DRAW_BACKGROUND |
                     RNE_WIDGET_FLAG_INTERACTIVE);

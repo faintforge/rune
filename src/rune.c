@@ -99,7 +99,7 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
                 .strictness = 1.0f,
             },
         },
-        .flags = RNE_WIDGET_FLAG_FLOATING,
+        .flags = RNE_WIDGET_FLAG_FIXED,
     };
 
     process_mouse(mouse);
@@ -115,11 +115,10 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     rne_push_font_size(ctx.default_style_stack.font_size);
     rne_push_flow(ctx.default_style_stack.flow);
     rne_push_parent(&ctx.container);
-    rne_push_fixed_x(0.0f);
-    rne_push_fixed_y(0.0f);
     rne_push_text_align(ctx.default_style_stack.text_align);
     rne_push_corner_radius(sp_v4s(0.0f));
     rne_push_padding(sp_v4s(0.0f));
+    rne_push_offset(sp_v2s(0.0f));
 }
 
 static void add_padding(RNE_Widget* widget) {
@@ -164,7 +163,7 @@ static void build_fixed_sizes(RNE_Widget* widget) {
 static SP_Vec2 sum_child_size(RNE_Widget* widget) {
     SP_Vec2 child_sum = sp_v2s(0.0f);
     for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-        if (!(curr_child->flags & RNE_WIDGET_FLAG_FLOATING_X << widget->flow)) {
+        if (!(curr_child->flags & RNE_WIDGET_FLAG_FIXED)) {
             child_sum.elements[widget->flow] += curr_child->computed_outer_size.elements[widget->flow];
             child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_outer_size.elements[!widget->flow]);
         }
@@ -274,8 +273,16 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
         return;
     }
 
-    for (RNE_Axis axis = 0; axis < RNE_AXIS_COUNT; axis++) {
-        if (!(widget->flags & RNE_WIDGET_FLAG_FLOATING_X << axis)) {
+    if (widget->flags & RNE_WIDGET_FLAG_FIXED) {
+        widget->computed_absolute_position = widget->offset;
+    } else if (widget->flags & RNE_WIDGET_FLAG_FLOATING) {
+        SP_Vec2 anchor = sp_v2s(0.0f);
+        if (widget->parent != NULL) {
+            anchor = sp_v2_add(widget->parent->computed_absolute_position, widget->parent->computed_inner_position);
+        }
+        widget->computed_absolute_position = sp_v2_add(anchor, widget->offset);
+    } else {
+        for (RNE_Axis axis = 0; axis < RNE_AXIS_COUNT; axis++) {
             widget->computed_relative_position = relative_position;
             if (widget->parent == NULL) {
                 widget->computed_absolute_position.elements[axis] = relative_position.elements[axis];
@@ -291,7 +298,6 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
     }
 
     build_positions(widget->next, relative_position);
-    // build_positions(widget->child_first, sp_v2s(0.0f));
     build_positions(widget->child_first, widget->computed_inner_position);
 }
 
@@ -517,15 +523,8 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
         .text_align = rne_top_text_align(),
         .corner_radius = rne_top_corner_radius(),
         .padding = rne_top_padding(),
+        .offset = rne_top_offset(),
     };
-
-    if (flags & RNE_WIDGET_FLAG_FLOATING_X) {
-        widget->computed_absolute_position.x = rne_top_fixed_x();
-    }
-
-    if (flags & RNE_WIDGET_FLAG_FLOATING_Y) {
-        widget->computed_absolute_position.y = rne_top_fixed_y();
-    }
 
     sp_dll_push_back(parent->child_first, parent->child_last, widget);
     return widget;

@@ -123,18 +123,18 @@ typedef enum RNE_WidgetFlags {
     RNE_WIDGET_FLAG_NONE            = 0,
     RNE_WIDGET_FLAG_DRAW_TEXT       = 1 << 0,
     RNE_WIDGET_FLAG_DRAW_BACKGROUND = 1 << 1,
-    RNE_WIDGET_FLAG_FLOATING_X      = 1 << 2,
-    RNE_WIDGET_FLAG_FLOATING_Y      = 1 << 3,
-    RNE_WIDGET_FLAG_FLOATING        = RNE_WIDGET_FLAG_FLOATING_X |
-                                      RNE_WIDGET_FLAG_FLOATING_Y,
+    // Fixed positioning with an offset from the top left of the screen.
+    RNE_WIDGET_FLAG_FIXED           = 1 << 2,
     // Widget will consume interaction events and can generate signals.
-    RNE_WIDGET_FLAG_INTERACTIVE     = 1 << 4,
-    RNE_WIDGET_FLAG_OVERFLOW_X      = 1 << 5,
-    RNE_WIDGET_FLAG_OVERFLOW_Y      = 1 << 6,
+    RNE_WIDGET_FLAG_INTERACTIVE     = 1 << 3,
+    RNE_WIDGET_FLAG_OVERFLOW_X      = 1 << 4,
+    RNE_WIDGET_FLAG_OVERFLOW_Y      = 1 << 5,
     RNE_WIDGET_FLAG_OVERFLOW        = RNE_WIDGET_FLAG_OVERFLOW_X |
                                       RNE_WIDGET_FLAG_OVERFLOW_Y,
-    RNE_WIDGET_FLAG_CLIP            = 1 << 7,
-    RNE_WIDGET_FLAG_VIEW_SCROLL     = 1 << 8,
+    RNE_WIDGET_FLAG_CLIP            = 1 << 6,
+    RNE_WIDGET_FLAG_VIEW_SCROLL     = 1 << 7,
+    // Fixed positioning with an offset from the parents position.
+    RNE_WIDGET_FLAG_FLOATING        = 1 << 8,
 } RNE_WidgetFlags;
 
 typedef enum RNE_Axis {
@@ -212,6 +212,7 @@ struct RNE_Widget {
     RNE_TextAlign text_align;
     SP_Vec4 corner_radius;
     SP_Vec4 padding;
+    SP_Vec2 offset;
 };
 
 typedef struct RNE_StyleStack RNE_StyleStack;
@@ -295,11 +296,10 @@ extern void rne_push_font(RNE_Handle value);
 extern void rne_push_font_size(f32 value);
 extern void rne_push_flow(RNE_Axis value);
 extern void rne_push_parent(RNE_Widget* value);
-extern void rne_push_fixed_x(f32 value);
-extern void rne_push_fixed_y(f32 value);
 extern void rne_push_text_align(RNE_TextAlign value);
 extern void rne_push_corner_radius(SP_Vec4 value);
 extern void rne_push_padding(SP_Vec4 value);
+extern void rne_push_offset(SP_Vec2 value);
 
 extern RNE_Size rne_pop_width(void);
 extern RNE_Size rne_pop_height(void);
@@ -309,11 +309,10 @@ extern RNE_Handle rne_pop_font(void);
 extern f32 rne_pop_font_size(void);
 extern RNE_Axis rne_pop_flow(void);
 extern RNE_Widget* rne_pop_parent(void);
-extern f32 rne_pop_fixed_x(void);
-extern f32 rne_pop_fixed_y(void);
 extern RNE_TextAlign rne_pop_text_align(void);
 extern SP_Vec4 rne_pop_corner_radius(void);
 extern SP_Vec4 rne_pop_padding(void);
+extern SP_Vec2 rne_pop_offset(void);
 
 extern void rne_next_width(RNE_Size value);
 extern void rne_next_height(RNE_Size value);
@@ -323,11 +322,10 @@ extern void rne_next_font(RNE_Handle value);
 extern void rne_next_font_size(f32 value);
 extern void rne_next_flow(RNE_Axis value);
 extern void rne_next_parent(RNE_Widget* value);
-extern void rne_next_fixed_x(f32 value);
-extern void rne_next_fixed_y(f32 value);
 extern void rne_next_text_align(RNE_TextAlign value);
 extern void rne_next_corner_radius(SP_Vec4 value);
 extern void rne_next_padding(SP_Vec4 value);
+extern void rne_next_offset(SP_Vec2 value);
 
 extern RNE_Size rne_top_width(void);
 extern RNE_Size rne_top_height(void);
@@ -337,8 +335,7 @@ extern RNE_Handle rne_top_font(void);
 extern f32 rne_top_font_size(void);
 extern RNE_Axis rne_top_flow(void);
 extern RNE_Widget* rne_top_parent(void);
-extern f32 rne_top_fixed_x(void);
-extern f32 rne_top_fixed_y(void);
 extern RNE_TextAlign rne_top_text_align(void);
 extern SP_Vec4 rne_top_corner_radius(void);
 extern SP_Vec4 rne_top_padding(void);
+extern SP_Vec2 rne_top_offset(void);

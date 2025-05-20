@@ -238,7 +238,7 @@ i32 main(void) {
 
         rne_begin(screen_size, mouse);
 
-        rne_next_offset(sp_v2s(16.0f));
+        rne_next_offset(rne_offset(sp_v2s(16.0f), sp_v2s(0.0f)));
         rne_next_width(RNE_SIZE_CHILDREN(1.0f));
         rne_next_height(RNE_SIZE_CHILDREN(1.0f));
         rne_next_bg(GB_BG_H);
@@ -262,7 +262,7 @@ i32 main(void) {
             rne_next_padding(sp_v4s(8.0f));
             rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
             rne_next_corner_radius(sp_v4(4.0f, 16.0f, 16.0f, 4.0f));
-            rne_next_offset(sp_v2(8.0f, 16.0f));
+            rne_next_offset(rne_offset(sp_v2(8.0f, 16.0f), sp_v2s(0.0f)));
             RNE_Widget* interactive = rne_widget(sp_str_lit("Interactive!"), RNE_WIDGET_FLAG_DRAW_TEXT |
                     RNE_WIDGET_FLAG_DRAW_BACKGROUND |
                     RNE_WIDGET_FLAG_INTERACTIVE);

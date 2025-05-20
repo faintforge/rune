@@ -164,6 +164,13 @@ typedef enum RNE_TextAlign {
     RNE_TEXT_ALIGN_RIGHT,
 } RNE_TextAlign;
 
+typedef struct RNE_Offset RNE_Offset;
+struct RNE_Offset {
+    SP_Vec2 pixels;
+    // Percent of parent size.
+    SP_Vec2 percent;
+};
+
 typedef struct RNE_Widget RNE_Widget;
 
 typedef void (*RNE_WidgetRenderFunc)(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata);
@@ -212,7 +219,7 @@ struct RNE_Widget {
     RNE_TextAlign text_align;
     SP_Vec4 corner_radius;
     SP_Vec4 padding;
-    SP_Vec2 offset;
+    RNE_Offset offset;
 };
 
 typedef struct RNE_StyleStack RNE_StyleStack;
@@ -287,6 +294,8 @@ extern RNE_Signal rne_signal(RNE_Widget* widget);
         .strictness = STRICTNESS \
     })
 
+extern RNE_Offset rne_offset(SP_Vec2 pixels, SP_Vec2 percent);
+
 // Stack operations
 extern void rne_push_width(RNE_Size value);
 extern void rne_push_height(RNE_Size value);
@@ -299,7 +308,7 @@ extern void rne_push_parent(RNE_Widget* value);
 extern void rne_push_text_align(RNE_TextAlign value);
 extern void rne_push_corner_radius(SP_Vec4 value);
 extern void rne_push_padding(SP_Vec4 value);
-extern void rne_push_offset(SP_Vec2 value);
+extern void rne_push_offset(RNE_Offset value);
 
 extern RNE_Size rne_pop_width(void);
 extern RNE_Size rne_pop_height(void);
@@ -312,7 +321,7 @@ extern RNE_Widget* rne_pop_parent(void);
 extern RNE_TextAlign rne_pop_text_align(void);
 extern SP_Vec4 rne_pop_corner_radius(void);
 extern SP_Vec4 rne_pop_padding(void);
-extern SP_Vec2 rne_pop_offset(void);
+extern RNE_Offset rne_pop_offset(void);
 
 extern void rne_next_width(RNE_Size value);
 extern void rne_next_height(RNE_Size value);
@@ -325,7 +334,7 @@ extern void rne_next_parent(RNE_Widget* value);
 extern void rne_next_text_align(RNE_TextAlign value);
 extern void rne_next_corner_radius(SP_Vec4 value);
 extern void rne_next_padding(SP_Vec4 value);
-extern void rne_next_offset(SP_Vec2 value);
+extern void rne_next_offset(RNE_Offset value);
 
 extern RNE_Size rne_top_width(void);
 extern RNE_Size rne_top_height(void);
@@ -338,4 +347,4 @@ extern RNE_Widget* rne_top_parent(void);
 extern RNE_TextAlign rne_top_text_align(void);
 extern SP_Vec4 rne_top_corner_radius(void);
 extern SP_Vec4 rne_top_padding(void);
-extern SP_Vec2 rne_top_offset(void);
+extern RNE_Offset rne_top_offset(void);

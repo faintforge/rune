@@ -118,7 +118,7 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     rne_push_text_align(ctx.default_style_stack.text_align);
     rne_push_corner_radius(sp_v4s(0.0f));
     rne_push_padding(sp_v4s(0.0f));
-    rne_push_offset(sp_v2s(0.0f));
+    rne_push_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.0f)));
 }
 
 static void add_padding(RNE_Widget* widget) {
@@ -274,13 +274,20 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
     }
 
     if (widget->flags & RNE_WIDGET_FLAG_FIXED) {
-        widget->computed_absolute_position = widget->offset;
+        SP_Vec2 offset_amount = widget->offset.pixels;
+        for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
+            offset_amount.elements[i] += ctx.container.size[i].value * widget->offset.percent.elements[i];
+        }
+        widget->computed_absolute_position = offset_amount;
     } else if (widget->flags & RNE_WIDGET_FLAG_FLOATING) {
         SP_Vec2 anchor = sp_v2s(0.0f);
+        SP_Vec2 offset_amount = widget->offset.pixels;
         if (widget->parent != NULL) {
             anchor = sp_v2_add(widget->parent->computed_absolute_position, widget->parent->computed_inner_position);
+            SP_Vec2 percent = sp_v2_mul(widget->parent->computed_inner_size, widget->offset.percent);
+            offset_amount = sp_v2_add(offset_amount, percent);
         }
-        widget->computed_absolute_position = sp_v2_add(anchor, widget->offset);
+        widget->computed_absolute_position = sp_v2_add(anchor, offset_amount);
     } else {
         for (RNE_Axis axis = 0; axis < RNE_AXIS_COUNT; axis++) {
             widget->computed_relative_position = relative_position;
@@ -584,6 +591,13 @@ RNE_Signal rne_signal(RNE_Widget* widget) {
         .scroll = scroll,
     };
     return signal;
+}
+
+RNE_Offset rne_offset(SP_Vec2 pixels, SP_Vec2 percent) {
+    return (RNE_Offset) {
+        .pixels = pixels,
+        .percent = percent,
+    };
 }
 
 // Push impls

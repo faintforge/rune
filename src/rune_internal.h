@@ -16,7 +16,7 @@
     X(TextAlign, text_align, RNE_TextAlign) \
     X(CornerRadius, corner_radius, SP_Vec4) \
     X(Padding, padding, SP_Vec4) \
-    X(Offset, offset, SP_Vec2)
+    X(Offset, offset, RNE_Offset)
 
 #define X(name_upper, name_lower, type) \
     typedef struct RNE_##name_upper##Node RNE_##name_upper##Node; \

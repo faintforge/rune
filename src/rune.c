@@ -163,7 +163,7 @@ static void build_fixed_sizes(RNE_Widget* widget) {
 static SP_Vec2 sum_child_size(RNE_Widget* widget) {
     SP_Vec2 child_sum = sp_v2s(0.0f);
     for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
-        if (!(curr_child->flags & RNE_WIDGET_FLAG_FIXED)) {
+        if (!(curr_child->flags & (RNE_WIDGET_FLAG_FIXED | RNE_WIDGET_FLAG_FLOATING))) {
             child_sum.elements[widget->flow] += curr_child->computed_outer_size.elements[widget->flow];
             child_sum.elements[!widget->flow] = sp_max(child_sum.elements[!widget->flow], curr_child->computed_outer_size.elements[!widget->flow]);
         }

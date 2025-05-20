@@ -6,3 +6,4 @@ effect.
 - [x] Floating vs fixed positioning.
 - [ ] ID stacks.
 - [x] Floating/fixed positioning anchors.
+- [ ] Refactor into a recursive breadth-first layouting algorithm.

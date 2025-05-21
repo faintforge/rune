@@ -171,13 +171,11 @@ static SP_Vec2 sum_child_size(RNE_Widget* widget) {
     return child_sum;
 }
 
-static void build_child_sizes(RNE_Widget* widget) {
+// Pre-order depth-first
+static void build_relative_sizes(RNE_Widget* widget) {
     if (widget == NULL) {
         return;
     }
-
-    build_child_sizes(widget->child_first);
-    build_child_sizes(widget->next);
 
     SP_Vec2 child_sum = sp_v2s(0.0f);
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
@@ -188,28 +186,21 @@ static void build_child_sizes(RNE_Widget* widget) {
     }
 
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
-        if (widget->size[i].kind == RNE_SIZE_KIND_CHILDREN) {
-            widget->computed_inner_size.elements[i] = child_sum.elements[i];
-        }
-    }
-    add_padding(widget);
-}
-
-static void build_parent_sizes(RNE_Widget* widget) {
-    if (widget == NULL) {
-        return;
-    }
-
-    for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
-        if (widget->size[i].kind == RNE_SIZE_KIND_PARENT) {
-            sp_assert(widget->parent != NULL, "Only (root-container) should have a NULL parent.");
-            widget->computed_inner_size.elements[i] = widget->parent->computed_inner_size.elements[i] * widget->size[i].value;
+        switch (widget->size[i].kind) {
+            case RNE_SIZE_KIND_CHILDREN:
+                widget->computed_inner_size.elements[i] = child_sum.elements[i];
+                break;
+            case RNE_SIZE_KIND_PARENT:
+                widget->computed_inner_size.elements[i] = widget->parent->computed_inner_size.elements[i] * widget->size[i].value;
+                break;
+            default:
+                break;
         }
     }
     add_padding(widget);
 
-    build_parent_sizes(widget->child_first);
-    build_parent_sizes(widget->next);
+    build_relative_sizes(widget->child_first);
+    build_relative_sizes(widget->next);
 }
 
 static void solve_size_violations(RNE_Widget* widget) {
@@ -312,9 +303,7 @@ void rne_end(void) {
     ctx.current_frame++;
 
     build_fixed_sizes(&ctx.container);
-    build_child_sizes(&ctx.container);
-    build_parent_sizes(&ctx.container);
-    // build_padding(&ctx.container);
+    build_relative_sizes(&ctx.container);
     solve_size_violations(&ctx.container);
     assign_child_size_sum(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));

@@ -3,30 +3,10 @@
 #include "rune/rune_tessellation.h"
 #include "spire.h"
 #include "renderer.h"
-
-#include <stdio.h>
+#include "font_data.h"
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
-
-static SP_Str read_file(SP_Arena* arena, SP_Str filename) {
-    const char* cstr_filename = sp_str_to_cstr(arena, filename);
-    FILE *fp = fopen(cstr_filename, "rb");
-    // Pop off the cstr_filename from the arena since it's no longer needed.
-    sp_arena_pop(arena, filename.len + 1);
-    if (fp == NULL) {
-        sp_error("Failed to open file '%.*s'.", filename.len, filename.data);
-        return (SP_Str) {0};
-    }
-
-    fseek(fp, 0, SEEK_END);
-    u32 len = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    u8* content = sp_arena_push(arena, len);
-    fread(content, sizeof(u8), len, fp);
-
-    return sp_str(content, len);
-}
 
 static RNE_Mouse mouse = {0};
 static void reset_mouse(void) {
@@ -184,7 +164,7 @@ i32 main(void) {
         .resize = atlas_resize,
         .update = atlas_update,
     };
-    SP_Str ttf_data = read_file(arena, sp_str_lit("assets/Roboto_Mono/static/RobotoMono-Regular.ttf"));
+
     RNE_Handle font = rne_font_create(arena, ttf_data, font_callbacks);
 
     rne_init((RNE_StyleStack) {

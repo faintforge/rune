@@ -128,38 +128,6 @@ static void add_padding(RNE_Widget* widget) {
     widget->computed_inner_position = sp_v2(padding.x, padding.y);
 }
 
-static void build_fixed_sizes(RNE_Widget* widget) {
-    if (widget == NULL) {
-        return;
-    }
-
-    SP_Vec2 text_size = sp_v2s(0.0f);
-    for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
-        if (widget->size[i].kind == RNE_SIZE_KIND_TEXT) {
-            text_size = ctx.text_measure(widget->font, widget->text, widget->font_size);
-            break;
-        }
-    }
-
-    for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
-        switch (widget->size[i].kind) {
-            case RNE_SIZE_KIND_PIXELS:
-                widget->computed_inner_size.elements[i] = widget->size[i].value;
-                break;
-            case RNE_SIZE_KIND_TEXT:
-                widget->computed_inner_size.elements[i] = text_size.elements[i];
-                break;
-            default:
-                break;
-        }
-    }
-
-    add_padding(widget);
-
-    build_fixed_sizes(widget->next);
-    build_fixed_sizes(widget->child_first);
-}
-
 static SP_Vec2 sum_child_size(RNE_Widget* widget) {
     SP_Vec2 child_sum = sp_v2s(0.0f);
     for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
@@ -171,10 +139,20 @@ static SP_Vec2 sum_child_size(RNE_Widget* widget) {
     return child_sum;
 }
 
-// Pre-order depth-first
-static void build_relative_sizes(RNE_Widget* widget) {
+static void build_intrinsic_size(RNE_Widget* widget) {
     if (widget == NULL) {
         return;
+    }
+
+    build_intrinsic_size(widget->next);
+    build_intrinsic_size(widget->child_first);
+
+    SP_Vec2 text_size = sp_v2s(0.0f);
+    for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
+        if (widget->size[i].kind == RNE_SIZE_KIND_TEXT) {
+            text_size = ctx.text_measure(widget->font, widget->text, widget->font_size);
+            break;
+        }
     }
 
     SP_Vec2 child_sum = sp_v2s(0.0f);
@@ -185,11 +163,33 @@ static void build_relative_sizes(RNE_Widget* widget) {
         }
     }
 
+
     for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
         switch (widget->size[i].kind) {
+            case RNE_SIZE_KIND_PIXELS:
+                widget->computed_inner_size.elements[i] = widget->size[i].value;
+                break;
+            case RNE_SIZE_KIND_TEXT:
+                widget->computed_inner_size.elements[i] = text_size.elements[i];
+                break;
             case RNE_SIZE_KIND_CHILDREN:
                 widget->computed_inner_size.elements[i] = child_sum.elements[i];
                 break;
+            default:
+                break;
+        }
+    }
+
+    add_padding(widget);
+}
+
+static void build_parent_size(RNE_Widget* widget) {
+    if (widget == NULL) {
+        return;
+    }
+
+    for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
+        switch (widget->size[i].kind) {
             case RNE_SIZE_KIND_PARENT:
                 widget->computed_inner_size.elements[i] = widget->parent->computed_inner_size.elements[i] * widget->size[i].value;
                 break;
@@ -199,8 +199,8 @@ static void build_relative_sizes(RNE_Widget* widget) {
     }
     add_padding(widget);
 
-    build_relative_sizes(widget->child_first);
-    build_relative_sizes(widget->next);
+    build_parent_size(widget->child_first);
+    build_parent_size(widget->next);
 }
 
 static void solve_size_violations(RNE_Widget* widget) {
@@ -217,29 +217,30 @@ static void solve_size_violations(RNE_Widget* widget) {
             continue;
         }
 
-        f32 total_violation_amount = child_sum.elements[i] - widget->computed_outer_size.elements[i];
-        f32 mutable_violation_amount = child_sum.elements[i] - widget->computed_inner_size.elements[i];
+        // f32 total_violation_amount = child_sum.elements[i] - widget->computed_outer_size.elements[i];
+        // f32 mutable_violation_amount = child_sum.elements[i] - widget->computed_inner_size.elements[i];
+        f32 violation_amount = child_sum.elements[i] - widget->computed_inner_size.elements[i];
 
         // Violation
-        if (mutable_violation_amount > 0.0f) {
+        if (violation_amount > 0.0f) {
             f32 total_budget = 0.0f;
             for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
                 total_budget += curr_child->computed_inner_size.elements[i] * (1.0f - curr_child->size[i].strictness);
             }
 
-            if (total_budget < total_violation_amount) {
-                // sp_debug("%.*s - violation = %f, child_sum = %f, widget_size = %f",
-                //         widget->id.len,
-                //         widget->id.data,
-                //         violation_amount,
-                //         child_sum.elements[i],
-                //         widget->computed_inner_size.elements[i]);
-                sp_warn("Widget '%.*s' has a sizing violation of %.0f pixels on the %s-axis.", widget->id.len, widget->id.data, total_violation_amount - total_budget, i ? "y" : "x");
+            if (total_budget < violation_amount) {
+                sp_debug("%.*s - violation = %f, child_sum = %f, widget_size = %f",
+                        widget->id.len,
+                        widget->id.data,
+                        violation_amount,
+                        child_sum.elements[i],
+                        widget->computed_inner_size.elements[i]);
+                sp_warn("Widget '%.*s' has a sizing violation of %.0f pixels on the %s-axis.", widget->id.len, widget->id.data, violation_amount - total_budget, i ? "y" : "x");
             }
 
             for (RNE_Widget* curr_child = widget->child_first; curr_child != NULL; curr_child = curr_child->next) {
                 f32 child_budget = curr_child->computed_inner_size.elements[i] * (1.0f - curr_child->size[i].strictness);
-                curr_child->computed_inner_size.elements[i] -= child_budget * (mutable_violation_amount / total_budget);
+                curr_child->computed_inner_size.elements[i] -= child_budget * (violation_amount / total_budget);
                 curr_child->computed_inner_size.elements[i] = floorf(curr_child->computed_inner_size.elements[i]);
                 add_padding(curr_child);
             }
@@ -302,8 +303,8 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
 void rne_end(void) {
     ctx.current_frame++;
 
-    build_fixed_sizes(&ctx.container);
-    build_relative_sizes(&ctx.container);
+    build_intrinsic_size(&ctx.container);
+    build_parent_size(&ctx.container);
     solve_size_violations(&ctx.container);
     assign_child_size_sum(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));

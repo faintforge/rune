@@ -82,7 +82,7 @@ static void process_mouse(RNE_Mouse mouse) {
 }
 
 void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
-    SP_Arena* arena = rne_get_arena();
+    SP_Arena* arena = rne_get_frame_arena();
     sp_arena_clear(arena);
 
     ctx.container = (RNE_Widget) {
@@ -407,13 +407,13 @@ static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
     rne_draw_helper(buffer, widget->next);
 }
 
-RNE_DrawCmdBuffer* rne_draw(SP_Arena* arena) {
-    RNE_DrawCmdBuffer* buffer = rne_draw_buffer_begin(arena);
-    rne_draw_helper(buffer, &ctx.container);
+RNE_DrawCmdBuffer rne_draw(SP_Arena* arena) {
+    RNE_DrawCmdBuffer buffer = rne_draw_buffer_begin(arena);
+    rne_draw_helper(&buffer, &ctx.container);
     return buffer;
 }
 
-SP_Arena* rne_get_arena(void) {
+SP_Arena* rne_get_frame_arena(void) {
     return ctx.frame_arenas[ctx.current_frame % sp_arrlen(ctx.frame_arenas)];
 }
 
@@ -484,7 +484,7 @@ static RNE_Widget* widget_from_id(SP_Str* id) {
 }
 
 RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
-    SP_Arena* arena = rne_get_arena();
+    SP_Arena* arena = rne_get_frame_arena();
     SP_Str text_copy = sp_str_pushf(arena, "%.*s", text.len, text.data);
     SP_Str id, display_text;
     parse_text(text_copy, &id, &display_text);
@@ -593,7 +593,7 @@ RNE_Offset rne_offset(SP_Vec2 pixels, SP_Vec2 percent) {
 // Push impls
 #define X(name_upper, name_lower, type) \
     void rne_push_##name_lower(type value) { \
-        SP_Arena* arena = rne_get_arena(); \
+        SP_Arena* arena = rne_get_frame_arena(); \
         RNE_##name_upper##Node* node = sp_arena_push_no_zero(arena, sizeof(RNE_##name_upper##Node)); \
         *node = (RNE_##name_upper##Node) { \
             .value = value, \
@@ -619,7 +619,7 @@ LIST_STYLE_STACKS
 // Push impls
 #define X(name_upper, name_lower, type) \
     void rne_next_##name_lower(type value) { \
-        SP_Arena* arena = rne_get_arena(); \
+        SP_Arena* arena = rne_get_frame_arena(); \
         RNE_##name_upper##Node* node = sp_arena_push_no_zero(arena, sizeof(RNE_##name_upper##Node)); \
         *node = (RNE_##name_upper##Node) { \
             .value = value, \
@@ -646,13 +646,14 @@ LIST_STYLE_STACKS
 
 // -- Drawing ------------------------------------------------------------------
 
-RNE_DrawCmdBuffer* rne_draw_buffer_begin(SP_Arena* arena) {
-    RNE_DrawCmdBuffer* buffer = sp_arena_push(arena, sizeof(RNE_DrawCmdBuffer));
-    buffer->arena = arena;
-    return buffer;
+RNE_DrawCmdBuffer rne_draw_buffer_begin(SP_Arena* arena) {
+    return (RNE_DrawCmdBuffer) {
+        .arena = arena,
+    };
 }
 
-void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd) {
+// Pushes a draw command onto the end of the draw buffer.
+static void rne_draw_buffer_push(RNE_DrawCmdBuffer* buffer, RNE_DrawCmd cmd) {
     RNE_DrawCmd* cmd_copy = sp_arena_push_no_zero(buffer->arena, sizeof(RNE_DrawCmd));
     *cmd_copy = cmd;
     sp_sll_queue_push(buffer->first, buffer->last, cmd_copy);

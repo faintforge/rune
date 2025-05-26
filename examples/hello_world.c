@@ -262,8 +262,8 @@ i32 main(void) {
         rne_end();
 
         // Render
-        SP_Arena* frame_arena = rne_get_arena();
-        RNE_DrawCmdBuffer* buffer = rne_draw(frame_arena);
+        SP_Arena* frame_arena = rne_get_frame_arena();
+        RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
 
         glViewport(0, 0, screen_size.x, screen_size.y);
         glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
@@ -276,7 +276,7 @@ i32 main(void) {
         glUseProgram(nr.shader);
         renderer_update_projection(&nr, screen_size);
         RNE_Handle textures[8] = {0};
-        while ((batch = rne_tessellate(buffer, (RNE_TessellationConfig) {
+        while ((batch = rne_tessellate(&buffer, (RNE_TessellationConfig) {
                 .arena = frame_arena,
                 .font = RNE_FONT_INTERFACE,
                 .vertex_buffer = nr.vertex_buffer,

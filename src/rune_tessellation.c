@@ -1,5 +1,4 @@
 #include "rune/rune_tessellation.h"
-#include "rune_internal.h"
 #include "spire.h"
 
 #define PI 3.14159265358979323846

@@ -65,9 +65,3 @@ struct RNE_Context {
 
 // Defined in rune.c
 extern RNE_Context ctx;
-
-struct RNE_DrawCmdBuffer {
-    SP_Arena* arena;
-    RNE_DrawCmd* first;
-    RNE_DrawCmd* last;
-};

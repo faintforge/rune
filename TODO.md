@@ -7,3 +7,4 @@ effect.
 - [ ] ID stacks.
 - [x] Floating/fixed positioning anchors.
 - [ ] Grow sizing.
+- [ ] Accelerated lookup structure for ascii characters in font module.

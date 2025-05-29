@@ -7,6 +7,6 @@ effect.
 - [ ] ID stacks.
 - [x] Floating/fixed positioning anchors.
 - [ ] Grow sizing.
-- [ ] Accelerated lookup structure for ascii characters in font module.
+- [x] Accelerated lookup structure for ascii characters in font module.
 - [ ] Make widget opaque and add getter/setters.
 - [ ] Add a polygon type to drawing API.

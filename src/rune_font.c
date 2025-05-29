@@ -247,14 +247,22 @@ struct RNE_GlyphInternal {
     SP_Ivec2 bitmap_size;
 };
 
+// Printable ASCII characters
+// https://www.ascii-code.com/
+#define ASCII_START 32
+#define ASCII_END 127
+#define ASCII_COUNT (ASCII_END - ASCII_START + 1)
+
 typedef struct RNE_SizedFont RNE_SizedFont;
 struct RNE_SizedFont {
     f32 size;
     QuadtreeAtlas atlas_packer;
     RNE_UserData userdata_atlas;
     // Key: u32 (glyph index)
-    // Value: GlyphInternal
+    // Value: RNE_GlyphInternal
     SP_HashMap* glyph_map;
+    // Keep all ASCII characters in a simple flat array to speed up queries.
+    RNE_GlyphInternal ascii_glyphs[ASCII_COUNT];
 };
 
 typedef struct RNE_Font RNE_Font;
@@ -338,6 +346,23 @@ static void expand_atlas(RNE_Font* font, RNE_SizedFont* sized) {
     SP_Scratch scratch = sp_scratch_begin(&font->arena, 1);
     u8* bitmap = sp_arena_push(scratch.arena, packer.size.x * packer.size.y);
 
+    // Iterate ascii characters
+    for (u8 i = 0; i < ASCII_COUNT; i++) {
+        RNE_GlyphInternal* glyph = &sized->ascii_glyphs[i];
+        // Character hasn't been cached yet.
+        if (glyph->bitmap == NULL) {
+            continue;
+        }
+
+        QuadtreeAtlasNode* node = quadtree_atlas_insert(&packer, glyph->bitmap_size);
+        for (i32 y = 0; y < glyph->bitmap_size.y; y++) {
+            u32 atlas_index = node->pos.x + (node->pos.y + y) * packer.size.x;
+            u32 glyph_index = y * glyph->bitmap_size.x;
+            memcpy(&bitmap[atlas_index], &glyph->bitmap[glyph_index], glyph->bitmap_size.x);
+        }
+        calculate_uvs(node->pos, node->size, packer.size, glyph->user_glyph.uv);
+    }
+
     SP_HashMapIter iter = sp_hm_iter_new(sized->glyph_map);
     while (sp_hm_iter_valid(iter)) {
         RNE_GlyphInternal* glyph = sp_hm_iter_get_valuep(iter);
@@ -375,10 +400,20 @@ RNE_Glyph rne_font_get_glyph(RNE_Handle font, u32 codepoint, f32 size) {
     RNE_Font* _font = font.ptr;
     RNE_SizedFont* sized = get_sized_font(_font, size);
 
+    b8 is_ascii = false;
     u32 glyph_index = _font->provider.get_glyph_index(_font->internal, codepoint);
-    RNE_Glyph* _glyph = sp_hm_getp(sized->glyph_map, glyph_index);
-    if (_glyph != NULL) {
-        return *_glyph;
+    if (codepoint >= ASCII_START && codepoint <= ASCII_END) {
+        is_ascii = true;
+        u32 index = codepoint - ASCII_START;
+        RNE_GlyphInternal glyph = sized->ascii_glyphs[index];
+        if (glyph.bitmap != NULL) {
+            return glyph.user_glyph;
+        }
+    } else {
+        RNE_Glyph* _glyph = sp_hm_getp(sized->glyph_map, glyph_index);
+        if (_glyph != NULL) {
+            return *_glyph;
+        }
     }
 
     SP_Scratch scratch = sp_scratch_begin(&_font->arena, 1);
@@ -407,7 +442,13 @@ RNE_Glyph rne_font_get_glyph(RNE_Handle font, u32 codepoint, f32 size) {
         .bitmap = bitmap,
     };
     calculate_uvs(node->pos, sp_v2_to_iv2(fp_glyph.size), sized->atlas_packer.size, glyph.user_glyph.uv);
-    sp_hm_insert(sized->glyph_map, glyph_index, glyph);
+
+    if (is_ascii) {
+        sized->ascii_glyphs[codepoint - ASCII_START] = glyph;
+    } else {
+        sp_debug("NON ASCII!!!");
+        sp_hm_insert(sized->glyph_map, glyph_index, glyph);
+    }
 
     return glyph.user_glyph;
 }

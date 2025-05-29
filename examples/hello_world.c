@@ -146,6 +146,7 @@ i32 main(void) {
     glfwWindowHint(GLFW_RESIZABLE, false);
     GLFWwindow* window = glfwCreateWindow(800, 600, "Nuh Uh", NULL, NULL);
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(0);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetCursorPosCallback(window, cursor_pos_callback);
     glfwSetScrollCallback(window, scroll_callback);
@@ -197,6 +198,8 @@ i32 main(void) {
 
     // Main loop
     while (!glfwWindowShouldClose(window)) {
+        SP_Arena* frame_arena = rne_get_frame_arena();
+
         f32 curr = sp_os_get_time();
         f32 dt = curr - last;
         last = curr;
@@ -218,6 +221,15 @@ i32 main(void) {
 
         rne_begin(screen_size, mouse);
 
+        rne_next_width(RNE_SIZE_TEXT(1.0f));
+        rne_next_height(RNE_SIZE_TEXT(1.0f));
+        rne_next_padding(sp_v4s(16.0f));
+        rne_next_font_size(24.0f);
+        rne_next_fg(GB_FG);
+        rne_next_offset(rne_offset(sp_v2(0.0f, 0.0f), sp_v2(0.5f, 0.0f)));
+        rne_widget(sp_str_pushf(frame_arena, "FPS: %d", last_fps), RNE_WIDGET_FLAG_DRAW_TEXT |
+                RNE_WIDGET_FLAG_FIXED);
+
         rne_next_offset(rne_offset(sp_v2s(16.0f), sp_v2s(0.0f)));
         rne_next_width(RNE_SIZE_CHILDREN(1.0f));
         rne_next_height(RNE_SIZE_CHILDREN(1.0f));
@@ -232,7 +244,7 @@ i32 main(void) {
             rne_next_height(RNE_SIZE_TEXT(1.0f));
             rne_next_fg(sp_color_hsv(sp_os_get_time() * 180.0f, 0.75f, 1.0f));
             rne_next_font_size(48.0f);
-            rne_widget(sp_str_lit("Hello, world!"), RNE_WIDGET_FLAG_DRAW_TEXT);
+            rne_widget(sp_str_lit("Rune"), RNE_WIDGET_FLAG_DRAW_TEXT);
 
             rne_next_bg(GB_BG);
             rne_next_fg(GB_GREEN);
@@ -262,7 +274,6 @@ i32 main(void) {
         rne_end();
 
         // Render
-        SP_Arena* frame_arena = rne_get_frame_arena();
         RNE_DrawCmdBuffer buffer = rne_draw(frame_arena);
 
         glViewport(0, 0, screen_size.x, screen_size.y);

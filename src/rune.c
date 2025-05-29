@@ -267,16 +267,20 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
 
     if (widget->flags & RNE_WIDGET_FLAG_FIXED) {
         SP_Vec2 offset_amount = widget->offset.pixels;
-        for (u8 i = 0; i < RNE_AXIS_COUNT; i++) {
-            offset_amount.elements[i] += ctx.container.size[i].value * widget->offset.percent.elements[i];
-        }
+        SP_Vec2 size = sp_v2(ctx.container.size[RNE_AXIS_HORIZONTAL].value,
+                ctx.container.size[RNE_AXIS_VERTICAL].value);
+        size = sp_v2_sub(size, widget->computed_outer_size);
+        SP_Vec2 percent = sp_v2_mul(size, widget->offset.percent);
+        offset_amount = sp_v2_add(offset_amount, percent);
         widget->computed_absolute_position = offset_amount;
     } else if (widget->flags & RNE_WIDGET_FLAG_FLOATING) {
         SP_Vec2 anchor = sp_v2s(0.0f);
         SP_Vec2 offset_amount = widget->offset.pixels;
         if (widget->parent != NULL) {
             anchor = sp_v2_add(widget->parent->computed_absolute_position, widget->parent->computed_inner_position);
-            SP_Vec2 percent = sp_v2_mul(widget->parent->computed_inner_size, widget->offset.percent);
+            SP_Vec2 size = widget->parent->computed_inner_size;
+            size = sp_v2_sub(size, widget->computed_outer_size);
+            SP_Vec2 percent = sp_v2_mul(size, widget->offset.percent);
             offset_amount = sp_v2_add(offset_amount, percent);
         }
         widget->computed_absolute_position = sp_v2_add(anchor, offset_amount);

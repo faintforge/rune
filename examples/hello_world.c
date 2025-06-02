@@ -184,7 +184,7 @@ i32 main(void) {
             .fg = SP_COLOR_WHITE,
             .bg = SP_COLOR_WHITE,
             .font = font,
-            .font_size = 24.0f,
+            .font_size = 32.0f,
             .flow = RNE_AXIS_VERTICAL,
             .text_align = RNE_TEXT_ALIGN_LEFT,
         }, rne_text_measure);
@@ -221,13 +221,39 @@ i32 main(void) {
 
         rne_begin(screen_size, mouse);
 
+        // rne_next_width(RNE_SIZE_CHILDREN(1.0f));
+        // rne_next_height(RNE_SIZE_CHILDREN(1.0f));
+        // rne_next_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.5f)));
+        // RNE_Widget* container = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_FIXED);
+        // rne_push_parent(container);
+        // {
+        //     rne_next_width(RNE_SIZE_TEXT(1.0f));
+        //     rne_next_height(RNE_SIZE_TEXT(1.0f));
+        //     rne_next_font_size(48.0f);
+        //     rne_widget(sp_str_lit("This is some longer text!"), RNE_WIDGET_FLAG_DRAW_TEXT);
+        //
+        //     rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
+        //     rne_next_height(RNE_SIZE_TEXT(1.0f));
+        //     rne_next_font_size(48.0f);
+        //     rne_next_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.5f)));
+        //     rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
+        //     rne_widget(sp_str_lit("Another line"), RNE_WIDGET_FLAG_DRAW_TEXT);
+        //
+        //     rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
+        //     rne_next_height(RNE_SIZE_TEXT(1.0f));
+        //     rne_next_font_size(48.0f);
+        //     rne_next_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.5f)));
+        //     rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
+        //     rne_widget(sp_str_lit("[Y]es or [N]o"), RNE_WIDGET_FLAG_DRAW_TEXT);
+        // }
+        // rne_pop_parent();
+
         rne_next_width(RNE_SIZE_TEXT(1.0f));
         rne_next_height(RNE_SIZE_TEXT(1.0f));
         rne_next_padding(sp_v4s(16.0f));
-        rne_next_font_size(24.0f);
         rne_next_fg(GB_FG);
-        rne_next_offset(rne_offset(sp_v2(0.0f, 0.0f), sp_v2(0.5f, 0.0f)));
-        rne_widget(sp_str_pushf(frame_arena, "FPS: %d", last_fps), RNE_WIDGET_FLAG_DRAW_TEXT |
+        rne_next_offset(rne_offset(sp_v2(0.0f, 0.0f), sp_v2(0.0f, 1.0f)));
+        rne_widget(sp_str_pushf(sp_arena_allocator(frame_arena), "FPS: %d", last_fps), RNE_WIDGET_FLAG_DRAW_TEXT |
                 RNE_WIDGET_FLAG_FIXED);
 
         rne_next_offset(rne_offset(sp_v2s(16.0f), sp_v2s(0.0f)));
@@ -248,7 +274,6 @@ i32 main(void) {
 
             rne_next_bg(GB_BG);
             rne_next_fg(GB_GREEN);
-            rne_push_font_size(32.0f);
             rne_next_width(RNE_SIZE_TEXT(1.0f));
             rne_next_height(RNE_SIZE_TEXT(1.0f));
             rne_next_padding(sp_v4s(8.0f));
@@ -259,7 +284,6 @@ i32 main(void) {
                     RNE_WIDGET_FLAG_DRAW_BACKGROUND |
                     RNE_WIDGET_FLAG_INTERACTIVE);
             rne_widget_equip_render_func(interactive, draw_border_func, NULL);
-            rne_pop_font_size();
 
             RNE_Signal signal = rne_signal(interactive);
             if (signal.hovered) {

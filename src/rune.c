@@ -53,7 +53,7 @@ void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measu
     sp_arena_tag(ctx.frame_arenas[0], sp_str_lit("ui-frame-0"));
     sp_arena_tag(ctx.frame_arenas[1], sp_str_lit("ui-frame-1"));
 
-    ctx.widget_map = sp_hm_new(sp_hm_desc_str(ctx.arena, 4096, RNE_Widget*));
+    ctx.widget_map = sp_hash_map_create(sp_hash_map_desc_str(sp_arena_allocator(ctx.arena), 4096, SP_HASH_COLLISION_RESOLUTION_SEPARATE_CHAINING, RNE_Widget*));
 
     // generate_header_functions();
 }
@@ -314,10 +314,11 @@ void rne_end(void) {
     build_positions(&ctx.container, sp_v2s(0.0f));
 
     RNE_Widget* remove_stack = NULL;
-    for (SP_HashMapIter i = sp_hm_iter_new(ctx.widget_map);
-            sp_hm_iter_valid(i);
-            i = sp_hm_iter_next(i)) {
-        RNE_Widget* widget = sp_hm_iter_get_value(i, RNE_Widget*);
+    for (SP_HashMapIter i = sp_hash_map_iter_init(ctx.widget_map);
+            sp_hash_map_iter_valid(i);
+            i = sp_hash_map_iter_next(i)) {
+        RNE_Widget* widget = NULL;
+        sp_hash_map_iter_get_value(i, &widget);
         sp_assert(widget->id.len != 0, "No ID widgets shouldn't be in the map.");
         if (widget->last_touched + 2 <= ctx.current_frame) {
             sp_sll_stack_push_nz(remove_stack, widget, stack_next, sp_null_check);
@@ -326,7 +327,8 @@ void rne_end(void) {
 
     while (remove_stack != NULL) {
         RNE_Widget* widget = remove_stack;
-        RNE_Widget* removed = sp_hm_remove(ctx.widget_map, widget->id, RNE_Widget*);
+        RNE_Widget* removed;
+        sp_hash_map_remove(ctx.widget_map, &widget->id, &removed);
         sp_assert(removed == widget, "Widget (%.*s) removed from map doesn't match dead widget. %p, %p", widget->id.len, widget->id.data, widget, removed);
         sp_sll_stack_pop_nz(remove_stack, stack_next, sp_null_check);
         sp_sll_stack_push_nz(ctx.widget_free_stack, widget, stack_next, sp_null_check);
@@ -462,7 +464,8 @@ static RNE_Widget* new_widget(void) {
 }
 
 static RNE_Widget* widget_from_id(SP_Str* id) {
-    RNE_Widget* widget = sp_hm_get(ctx.widget_map, *id, RNE_Widget*);
+    RNE_Widget* widget = NULL;
+    sp_hash_map_get(ctx.widget_map, id, &widget);
 
     // New ID
     if (widget == NULL) {
@@ -475,7 +478,7 @@ static RNE_Widget* widget_from_id(SP_Str* id) {
             u8* id_data = sp_arena_push_no_zero(ctx.arena, id->len);
             memcpy(id_data, id->data, id->len);
             *id = sp_str(id_data, id->len);
-            sp_hm_insert(ctx.widget_map, *id, widget);
+            sp_hash_map_insert(ctx.widget_map, id, &widget);
         }
     }
     // Duplicate ID
@@ -489,7 +492,7 @@ static RNE_Widget* widget_from_id(SP_Str* id) {
 
 RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
     SP_Arena* arena = rne_get_frame_arena();
-    SP_Str text_copy = sp_str_pushf(arena, "%.*s", text.len, text.data);
+    SP_Str text_copy = sp_str_pushf(sp_arena_allocator(arena), "%.*s", text.len, text.data);
     SP_Str id, display_text;
     parse_text(text_copy, &id, &display_text);
 

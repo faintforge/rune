@@ -162,7 +162,7 @@ struct STBTTInternal {
 static void* fp_stbtt_init(SP_Arena* arena, SP_Str ttf_data) {
     STBTTInternal* internal = sp_arena_push_no_zero(arena, sizeof(STBTTInternal));
 
-    const u8* ttf_cstr = (const u8*) sp_str_to_cstr(arena, ttf_data);
+    const u8* ttf_cstr = (const u8*) sp_str_to_cstr(sp_arena_allocator(arena), ttf_data);
     if (!stbtt_InitFont(&internal->info, ttf_cstr, stbtt_GetFontOffsetForIndex(ttf_cstr, 0))) {
         sp_error("STBTT: Init error!");
     }
@@ -284,7 +284,7 @@ static RNE_SizedFont sized_font_create(RNE_Font* font, f32 size) {
         .size = size,
         .atlas_packer = quadtree_atlas_init(font->arena, atlas_size),
         .userdata_atlas = font->cb.create(atlas_size),
-        .glyph_map = sp_hm_new(sp_hm_desc_generic(font->arena, 32, u32, RNE_GlyphInternal)),
+        .glyph_map = sp_hash_map_create(sp_hash_map_desc_generic(sp_arena_allocator(font->arena), 32, SP_HASH_COLLISION_RESOLUTION_SEPARATE_CHAINING, u32, RNE_GlyphInternal)),
     };
     return sized;
 }
@@ -297,7 +297,7 @@ RNE_Handle rne_font_create(SP_Arena* arena, SP_Str ttf_data, RNE_FontCallbacks c
         .provider = provider,
         .internal = provider.init(arena, ttf_data),
         .ttf_data = ttf_data,
-        .map = sp_hm_new(sp_hm_desc_generic(arena, 32, f32, RNE_SizedFont)),
+        .map = sp_hash_map_create(sp_hash_map_desc_generic(sp_arena_allocator(arena), 32, SP_HASH_COLLISION_RESOLUTION_SEPARATE_CHAINING, f32, RNE_SizedFont)),
         .cb = callbacks,
     };
 
@@ -308,10 +308,11 @@ RNE_Handle rne_font_create(SP_Arena* arena, SP_Str ttf_data, RNE_FontCallbacks c
 
 void rne_font_destroy(RNE_Handle* font) {
     RNE_Font* _font = font->ptr;
-    for (SP_HashMapIter iter = sp_hm_iter_new(_font->map);
-            sp_hm_iter_valid(iter);
-            iter = sp_hm_iter_next(iter)) {
-        RNE_SizedFont sized = sp_hm_iter_get_value(iter, RNE_SizedFont);
+    for (SP_HashMapIter iter = sp_hash_map_iter_init(_font->map);
+            sp_hash_map_iter_valid(iter);
+            iter = sp_hash_map_iter_next(iter)) {
+        RNE_SizedFont sized;
+        sp_hash_map_iter_get_value(iter, &sized);
         _font->cb.destroy(sized.userdata_atlas);
     }
 
@@ -319,11 +320,11 @@ void rne_font_destroy(RNE_Handle* font) {
 }
 
 static RNE_SizedFont* get_sized_font(RNE_Font* font, f32 size) {
-    RNE_SizedFont* result = sp_hm_getp(font->map, size);
+    RNE_SizedFont* result = sp_hash_map_getp(font->map, &size);
     if (result == NULL) {
         RNE_SizedFont sized = sized_font_create(font, size);
-        sp_hm_insert(font->map, size, sized);
-        result = sp_hm_getp(font->map, size);
+        sp_hash_map_insert(font->map, &size, &sized);
+        result = sp_hash_map_getp(font->map, &size);
     }
     return result;
 }
@@ -363,9 +364,9 @@ static void expand_atlas(RNE_Font* font, RNE_SizedFont* sized) {
         calculate_uvs(node->pos, node->size, packer.size, glyph->user_glyph.uv);
     }
 
-    SP_HashMapIter iter = sp_hm_iter_new(sized->glyph_map);
-    while (sp_hm_iter_valid(iter)) {
-        RNE_GlyphInternal* glyph = sp_hm_iter_get_valuep(iter);
+    SP_HashMapIter iter = sp_hash_map_iter_init(sized->glyph_map);
+    while (sp_hash_map_iter_valid(iter)) {
+        RNE_GlyphInternal* glyph = sp_hash_map_iter_get_valuep(iter);
         QuadtreeAtlasNode* node = quadtree_atlas_insert(&packer, glyph->bitmap_size);
         for (i32 y = 0; y < glyph->bitmap_size.y; y++) {
             u32 atlas_index = node->pos.x + (node->pos.y + y) * packer.size.x;
@@ -374,7 +375,7 @@ static void expand_atlas(RNE_Font* font, RNE_SizedFont* sized) {
         }
         calculate_uvs(node->pos, node->size, packer.size, glyph->user_glyph.uv);
 
-        iter = sp_hm_iter_next(iter);
+        iter = sp_hash_map_iter_next(iter);
     }
 
     font->cb.resize(sized->userdata_atlas, packer.size, bitmap);
@@ -410,7 +411,7 @@ RNE_Glyph rne_font_get_glyph(RNE_Handle font, u32 codepoint, f32 size) {
             return glyph.user_glyph;
         }
     } else {
-        RNE_Glyph* _glyph = sp_hm_getp(sized->glyph_map, glyph_index);
+        RNE_Glyph* _glyph = sp_hash_map_getp(sized->glyph_map, &glyph_index);
         if (_glyph != NULL) {
             return *_glyph;
         }
@@ -447,7 +448,7 @@ RNE_Glyph rne_font_get_glyph(RNE_Handle font, u32 codepoint, f32 size) {
         sized->ascii_glyphs[codepoint - ASCII_START] = glyph;
     } else {
         sp_debug("NON ASCII!!!");
-        sp_hm_insert(sized->glyph_map, glyph_index, glyph);
+        sp_hash_map_insert(sized->glyph_map, &glyph_index, &glyph);
     }
 
     return glyph.user_glyph;

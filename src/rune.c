@@ -560,6 +560,8 @@ static RNE_Widget* new_widget(void) {
 }
 
 static RNE_Widget* widget_from_id(SP_Str* id) {
+    // TODO: ID stacks so duplicate IDs only happen within the same parent
+
     RNE_Widget* widget = NULL;
     sp_hash_map_get(ctx.widget_map, id, &widget);
 
@@ -579,6 +581,8 @@ static RNE_Widget* widget_from_id(SP_Str* id) {
     }
     // Duplicate ID
     else if (widget->last_touched == ctx.current_frame) {
+        sp_warn("Duplicate ID '%.*s'!", id->len, id->data);
+        widget = new_widget();
         *id = sp_str_lit("");
         sp_sll_stack_push_nz(ctx.widget_no_id_stack, widget, stack_next, sp_null_check);
     }

@@ -292,23 +292,25 @@ i32 main(void) {
                 if (signal.just_released) { sp_info("Released"); }
             }
         }
-        rne_pop_parent();
 
         rne_next_width(RNE_SIZE_TEXT(1.0f));
         rne_next_height(RNE_SIZE_TEXT(1.0f));
-        rne_next_padding(sp_v4s(16.0f));
-        rne_next_fg(GB_FG);
-        rne_next_bg(GB_BG1);
-        rne_next_offset(rne_offset(sp_v2(0.0f, 50.0f), sp_v2(0.0f, 0.0f)));
-        RNE_Widget* overlap = rne_widget(sp_str_lit("overlap"), RNE_WIDGET_FLAG_DRAW_TEXT |
-                RNE_WIDGET_FLAG_FIXED |
-                RNE_WIDGET_FLAG_DRAW_BACKGROUND);
-        RNE_Signal signal = rne_signal(overlap);
-        if (signal.focused) {
-            overlap->bg = GB_BG2;
-        } else {
-            overlap->bg = GB_BG1;
+        rne_widget(sp_str_lit("duplicate"), RNE_WIDGET_FLAG_DRAW_TEXT);
+
+        rne_next_width(RNE_SIZE_CHILDREN(1.0f));
+        rne_next_height(RNE_SIZE_CHILDREN(1.0f));
+        RNE_Widget* other_container = rne_widget(sp_str_lit("some_id"), RNE_WIDGET_FLAG_DRAW_BACKGROUND);
+        rne_push_parent(other_container);
+        {
+            rne_next_width(RNE_SIZE_TEXT(1.0f));
+            rne_next_height(RNE_SIZE_TEXT(1.0f));
+            rne_next_fg(SP_COLOR_BLACK);
+            rne_widget(sp_str_lit("duplicate"), RNE_WIDGET_FLAG_DRAW_TEXT);
         }
+        rne_pop_parent();
+
+        rne_pop_parent();
+
 
         rne_end();
 

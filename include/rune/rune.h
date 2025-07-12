@@ -207,8 +207,8 @@ typedef enum RNE_WidgetFlags {
     RNE_WIDGET_FLAG_DRAW_BACKGROUND = 1 << 1,
     // Fixed positioning with an offset from the top left of the screen.
     RNE_WIDGET_FLAG_FIXED           = 1 << 2,
-    // Widget will consume interaction events and can generate signals.
-    RNE_WIDGET_FLAG_INTERACTIVE     = 1 << 3,
+    // Widget will not consume interaction events and won't generate signals.
+    RNE_WIDGET_FLAG_NON_INTERACTIVE     = 1 << 3,
     // Allow child elements to overflow on the X axis.
     RNE_WIDGET_FLAG_OVERFLOW_X      = 1 << 4,
     // Allow child elements to overflow on the Y axis.
@@ -262,6 +262,18 @@ typedef struct RNE_Widget RNE_Widget;
 
 typedef void (*RNE_WidgetRenderFunc)(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata);
 
+typedef struct RNE_Signal RNE_Signal;
+struct RNE_Signal {
+    b8 hovered;
+    b8 pressed;
+    b8 just_pressed;
+    b8 just_released;
+    b8 focused;
+    b8 active;
+    SP_Vec2 drag;
+    f32 scroll;
+};
+
 struct RNE_Widget {
     RNE_Widget* parent;
 
@@ -293,6 +305,7 @@ struct RNE_Widget {
     SP_Str id;
     SP_Str text;
     u32 last_touched;
+    RNE_Signal signal;
 
     RNE_WidgetRenderFunc render_func;
     void* render_userdata;
@@ -331,17 +344,6 @@ typedef struct RNE_Mouse RNE_Mouse;
 struct RNE_Mouse {
     b8 buttons[RNE_MOUSE_BUTTON_COUNT];
     SP_Vec2 pos;
-    f32 scroll;
-};
-
-typedef struct RNE_Signal RNE_Signal;
-struct RNE_Signal {
-    b8 hovered;
-    b8 pressed;
-    b8 just_pressed;
-    b8 just_released;
-    b8 focused;
-    SP_Vec2 drag;
     f32 scroll;
 };
 

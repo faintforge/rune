@@ -53,6 +53,7 @@ struct RNE_Context {
     RNE_Widget* widget_free_stack;
 
     RNE_Widget* focused_widget;
+    RNE_Widget* active_widget;
     RNE_InternalMouse mouse;
 
     RNE_TextMeasureFunc text_measure;

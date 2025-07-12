@@ -81,9 +81,110 @@ static void process_mouse(RNE_Mouse mouse) {
     ctx.mouse = old;
 }
 
+static void reset_signals(RNE_Widget* widget, RNE_Widget* hit_widget) {
+    if (widget == NULL) {
+        return;
+    }
+    if (widget != hit_widget) {
+        widget->signal = (RNE_Signal) {
+            .focused = widget == ctx.focused_widget,
+            .active = widget == ctx.active_widget,
+        };
+    }
+    reset_signals(widget->next, hit_widget);
+    reset_signals(widget->child_first, hit_widget);
+}
+
+static RNE_Widget* hit_testing(RNE_Widget* widget) {
+    if (widget == NULL) {
+        return NULL;
+    }
+
+    // Post-order depth-first
+    RNE_Widget* hit_result = NULL;
+    hit_result = hit_testing(widget->child_last);
+    if (hit_result != NULL) {
+        return hit_result;
+    }
+
+    SP_Vec2 mpos = ctx.mouse.pos;
+    f32 left = widget->computed_absolute_position.x;
+    f32 right = left + widget->computed_outer_size.x;
+    f32 top = widget->computed_absolute_position.y;
+    f32 bottom = top + widget->computed_outer_size.y;
+    b8 hovered = mpos.x > left &&
+        mpos.x < right &&
+        mpos.y < bottom &&
+        mpos.y > top;
+
+    if (hovered && !(widget->flags & RNE_WIDGET_FLAG_NON_INTERACTIVE)) {
+        return widget;
+    }
+
+    hit_result = hit_testing(widget->prev);
+    if (hit_result != NULL) {
+        return hit_result;
+    }
+
+    return NULL;
+}
+
+static void process_signal(RNE_Widget* widget) {
+    if (widget == NULL) {
+        return;
+    }
+
+    SP_Vec2 mpos = ctx.mouse.pos;
+    f32 left = widget->computed_absolute_position.x;
+    f32 right = left + widget->computed_outer_size.x;
+    f32 top = widget->computed_absolute_position.y;
+    f32 bottom = top + widget->computed_outer_size.y;
+    b8 hovered = mpos.x > left &&
+        mpos.x < right &&
+        mpos.y < bottom &&
+        mpos.y > top;
+
+    b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
+
+    widget->signal = (RNE_Signal) {
+        .hovered = hovered,
+        .just_pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed,
+        .just_released = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_released,
+        .pressed = pressed,
+        .focused = widget == ctx.focused_widget,
+        .active = widget == ctx.active_widget,
+        .scroll = hovered && ctx.mouse.scroll,
+        .drag = pressed ? ctx.mouse.pos_delta : sp_v2s(0.0f),
+    };
+
+    if (widget->flags & RNE_WIDGET_FLAG_VIEW_SCROLL) {
+        f32 child_height = widget->child_size_sum.y;
+        f32 view_height = widget->computed_inner_size.y;
+        f32 scroll_bound = child_height - view_height;
+        widget->view_offset.y += widget->signal.scroll * 32.0f;
+        widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);
+    }
+
+    if (pressed) {
+        ctx.focused_widget = widget;
+        ctx.active_widget = widget;
+    }
+}
+
 void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     SP_Arena* arena = rne_get_frame_arena();
     sp_arena_clear(arena);
+
+    process_mouse(mouse);
+    if (!ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down) {
+        ctx.focused_widget = NULL;
+    }
+    RNE_Widget* signal_widget = ctx.focused_widget;
+    if (ctx.focused_widget == NULL) {
+        signal_widget = hit_testing(&ctx.container);
+    }
+    process_signal(signal_widget);
+    reset_signals(&ctx.container, signal_widget);
 
     ctx.container = (RNE_Widget) {
         .id = sp_str_lit("(root_container)"),
@@ -101,11 +202,6 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
         },
         .flags = RNE_WIDGET_FLAG_FIXED,
     };
-
-    process_mouse(mouse);
-    if (!ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down) {
-        ctx.focused_widget = NULL;
-    }
 
     rne_push_width(ctx.default_style_stack.size[RNE_AXIS_HORIZONTAL]);
     rne_push_height(ctx.default_style_stack.size[RNE_AXIS_VERTICAL]);
@@ -518,6 +614,7 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
         .computed_outer_size = widget->computed_outer_size,
         .view_offset = widget->view_offset,
         .child_size_sum = widget->child_size_sum,
+        .signal = widget->signal,
 
         .bg = rne_top_bg(),
         .fg = rne_top_fg(),
@@ -540,54 +637,56 @@ void rne_widget_equip_render_func(RNE_Widget* widget, RNE_WidgetRenderFunc func,
 }
 
 RNE_Signal rne_signal(RNE_Widget* widget) {
-    if (!(widget->flags & RNE_WIDGET_FLAG_INTERACTIVE)) {
-        return (RNE_Signal) {0};
-    }
+    return widget->signal;
 
-    // TODO: Occlusion. Two interactive elements on top of eachother isn't
-    // handled right now.
-
-    SP_Vec2 mpos = ctx.mouse.pos;
-    f32 left = widget->computed_absolute_position.x;
-    f32 right = left + widget->computed_outer_size.x;
-    f32 top = widget->computed_absolute_position.y;
-    f32 bottom = top + widget->computed_outer_size.y;
-
-    b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
-    b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
-    if (pressed && ctx.focused_widget == NULL) {
-        ctx.focused_widget = widget;
-    }
-    b8 focused = widget == ctx.focused_widget;
-    b8 just_pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed;
-    b8 just_released = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_released;
-    SP_Vec2 drag = sp_v2s(0.0f);
-    if (focused) {
-        drag = ctx.mouse.pos_delta;
-    }
-    f32 scroll = 0.0f;
-    if (hovered) {
-        scroll = ctx.mouse.scroll;
-    }
-
-    if (widget->flags & RNE_WIDGET_FLAG_VIEW_SCROLL) {
-        f32 child_height = widget->child_size_sum.y;
-        f32 view_height = widget->computed_inner_size.y;
-        f32 scroll_bound = child_height - view_height;
-        widget->view_offset.y += scroll * 32.0f;
-        widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);
-    }
-
-    RNE_Signal signal = {
-        .hovered = hovered,
-        .pressed = pressed,
-        .just_pressed = just_pressed,
-        .just_released = just_released,
-        .focused = focused,
-        .drag = drag,
-        .scroll = scroll,
-    };
-    return signal;
+    // if (!(widget->flags & RNE_WIDGET_FLAG_INTERACTIVE)) {
+    //     return (RNE_Signal) {0};
+    // }
+    //
+    // // TODO: Occlusion. Two interactive elements on top of eachother isn't
+    // // handled right now.
+    //
+    // SP_Vec2 mpos = ctx.mouse.pos;
+    // f32 left = widget->computed_absolute_position.x;
+    // f32 right = left + widget->computed_outer_size.x;
+    // f32 top = widget->computed_absolute_position.y;
+    // f32 bottom = top + widget->computed_outer_size.y;
+    //
+    // b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
+    // b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
+    // if (pressed && ctx.focused_widget == NULL) {
+    //     ctx.focused_widget = widget;
+    // }
+    // b8 focused = widget == ctx.focused_widget;
+    // b8 just_pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed;
+    // b8 just_released = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_released;
+    // SP_Vec2 drag = sp_v2s(0.0f);
+    // if (focused) {
+    //     drag = ctx.mouse.pos_delta;
+    // }
+    // f32 scroll = 0.0f;
+    // if (hovered) {
+    //     scroll = ctx.mouse.scroll;
+    // }
+    //
+    // if (widget->flags & RNE_WIDGET_FLAG_VIEW_SCROLL) {
+    //     f32 child_height = widget->child_size_sum.y;
+    //     f32 view_height = widget->computed_inner_size.y;
+    //     f32 scroll_bound = child_height - view_height;
+    //     widget->view_offset.y += scroll * 32.0f;
+    //     widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);
+    // }
+    //
+    // RNE_Signal signal = {
+    //     .hovered = hovered,
+    //     .pressed = pressed,
+    //     .just_pressed = just_pressed,
+    //     .just_released = just_released,
+    //     .focused = focused,
+    //     .drag = drag,
+    //     .scroll = scroll,
+    // };
+    // return signal;
 }
 
 RNE_Offset rne_offset(SP_Vec2 pixels, SP_Vec2 percent) {

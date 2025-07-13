@@ -141,6 +141,7 @@ void rne_widget_map_cleanup(RNE_WidgetMap* map) {
     while (map->no_id_stack != NULL) {
         RNE_Widget* no_id = map->no_id_stack;
         map->no_id_stack = no_id->stack_next;
+        no_id->map_state = WIDGET_DEAD;
 
         no_id->stack_next = map->free_stack;
         map->free_stack = no_id;

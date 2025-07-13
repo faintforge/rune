@@ -221,33 +221,6 @@ i32 main(void) {
 
         rne_begin(screen_size, mouse);
 
-        // rne_next_width(RNE_SIZE_CHILDREN(1.0f));
-        // rne_next_height(RNE_SIZE_CHILDREN(1.0f));
-        // rne_next_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.5f)));
-        // RNE_Widget* container = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_FIXED);
-        // rne_push_parent(container);
-        // {
-        //     rne_next_width(RNE_SIZE_TEXT(1.0f));
-        //     rne_next_height(RNE_SIZE_TEXT(1.0f));
-        //     rne_next_font_size(48.0f);
-        //     rne_widget(sp_str_lit("This is some longer text!"), RNE_WIDGET_FLAG_DRAW_TEXT);
-        //
-        //     rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
-        //     rne_next_height(RNE_SIZE_TEXT(1.0f));
-        //     rne_next_font_size(48.0f);
-        //     rne_next_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.5f)));
-        //     rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
-        //     rne_widget(sp_str_lit("Another line"), RNE_WIDGET_FLAG_DRAW_TEXT);
-        //
-        //     rne_next_width(RNE_SIZE_PARENT(1.0f, 1.0f));
-        //     rne_next_height(RNE_SIZE_TEXT(1.0f));
-        //     rne_next_font_size(48.0f);
-        //     rne_next_offset(rne_offset(sp_v2s(0.0f), sp_v2s(0.5f)));
-        //     rne_next_text_align(RNE_TEXT_ALIGN_CENTER);
-        //     rne_widget(sp_str_lit("[Y]es or [N]o"), RNE_WIDGET_FLAG_DRAW_TEXT);
-        // }
-        // rne_pop_parent();
-
         rne_next_width(RNE_SIZE_TEXT(1.0f));
         rne_next_height(RNE_SIZE_TEXT(1.0f));
         rne_next_padding(sp_v4s(16.0f));
@@ -262,7 +235,7 @@ i32 main(void) {
         rne_next_bg(GB_BG_H);
         rne_next_padding(sp_v4s(16.0f));
         rne_next_corner_radius(sp_v4s(16.0f));
-        RNE_Widget* column = rne_widget(sp_str_lit(""), RNE_WIDGET_FLAG_DRAW_BACKGROUND |
+        RNE_Widget* column = rne_widget(sp_str_lit("col"), RNE_WIDGET_FLAG_DRAW_BACKGROUND |
                 RNE_WIDGET_FLAG_FIXED);
         rne_push_parent(column);
         {
@@ -291,26 +264,24 @@ i32 main(void) {
                 if (signal.just_pressed) { sp_info("Pressed"); }
                 if (signal.just_released) { sp_info("Released"); }
             }
-        }
 
-        rne_next_width(RNE_SIZE_TEXT(1.0f));
-        rne_next_height(RNE_SIZE_TEXT(1.0f));
-        rne_widget(sp_str_lit("duplicate"), RNE_WIDGET_FLAG_DRAW_TEXT);
-
-        rne_next_width(RNE_SIZE_CHILDREN(1.0f));
-        rne_next_height(RNE_SIZE_CHILDREN(1.0f));
-        RNE_Widget* other_container = rne_widget(sp_str_lit("some_id"), RNE_WIDGET_FLAG_DRAW_BACKGROUND);
-        rne_push_parent(other_container);
-        {
             rne_next_width(RNE_SIZE_TEXT(1.0f));
             rne_next_height(RNE_SIZE_TEXT(1.0f));
-            rne_next_fg(SP_COLOR_BLACK);
             rne_widget(sp_str_lit("duplicate"), RNE_WIDGET_FLAG_DRAW_TEXT);
+
+            rne_next_width(RNE_SIZE_CHILDREN(1.0f));
+            rne_next_height(RNE_SIZE_CHILDREN(1.0f));
+            RNE_Widget* other_container = rne_widget(sp_str_lit("some_id"), RNE_WIDGET_FLAG_DRAW_BACKGROUND);
+            rne_push_parent(other_container);
+            {
+                rne_next_width(RNE_SIZE_TEXT(1.0f));
+                rne_next_height(RNE_SIZE_TEXT(1.0f));
+                rne_next_fg(SP_COLOR_BLACK);
+                rne_widget(sp_str_lit("duplicate"), RNE_WIDGET_FLAG_DRAW_TEXT);
+            }
+            rne_pop_parent();
         }
         rne_pop_parent();
-
-        rne_pop_parent();
-
 
         rne_end();
 

@@ -40,6 +40,16 @@ struct RNE_InternalMouse {
     f32 scroll;
 };
 
+#define WIDGET_MAP_COUNT 1
+
+typedef struct RNE_WidgetMap RNE_WidgetMap;
+struct RNE_WidgetMap {
+    SP_Arena* arena;
+    RNE_Widget widgets[WIDGET_MAP_COUNT];
+    RNE_Widget* free_stack;
+    RNE_Widget* no_id_stack;
+};
+
 #define X(name_upper, name_lower, type) RNE_##name_upper##Node* name_lower##_stack;
 typedef struct RNE_Context RNE_Context;
 struct RNE_Context {
@@ -48,9 +58,10 @@ struct RNE_Context {
     RNE_Widget container;
     u64 current_frame;
 
-    SP_HashMap* widget_map;
+    RNE_WidgetMap widget_map;
     RNE_Widget* widget_no_id_stack;
     RNE_Widget* widget_free_stack;
+    u64 current_hash;
 
     RNE_Widget* focused_widget;
     RNE_Widget* active_widget;
@@ -66,3 +77,7 @@ struct RNE_Context {
 
 // Defined in rune.c
 extern RNE_Context ctx;
+
+extern RNE_WidgetMap rne_widget_map_init(SP_Arena* arena);
+extern RNE_Widget* rne_widget_map_request(RNE_WidgetMap* map, u64 hash, SP_Str id);
+extern void rne_widget_map_cleanup(RNE_WidgetMap* map);

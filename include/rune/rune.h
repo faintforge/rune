@@ -258,10 +258,6 @@ struct RNE_Offset {
     SP_Vec2 percent;
 };
 
-typedef struct RNE_Widget RNE_Widget;
-
-typedef void (*RNE_WidgetRenderFunc)(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata);
-
 typedef struct RNE_Signal RNE_Signal;
 struct RNE_Signal {
     b8 hovered;
@@ -274,6 +270,10 @@ struct RNE_Signal {
     f32 scroll;
 };
 
+typedef struct RNE_Widget RNE_Widget;
+
+typedef void (*RNE_WidgetRenderFunc)(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget, void* userdata);
+
 struct RNE_Widget {
     RNE_Widget* parent;
 
@@ -284,8 +284,14 @@ struct RNE_Widget {
     // Children
     RNE_Widget* child_first;
     RNE_Widget* child_last;
-    SP_Vec2 child_size_sum;
 
+    // Map
+    u64 hash;
+    SP_Str id;
+    u8 map_state;
+    RNE_Widget* map_next;
+    RNE_Widget* map_prev;
+    RNE_Widget* map_last;
     RNE_Widget* stack_next;
 
     RNE_WidgetFlags flags;
@@ -301,11 +307,11 @@ struct RNE_Widget {
     // Size children use
     SP_Vec2 computed_inner_size;
     SP_Vec2 view_offset;
+    SP_Vec2 child_size_sum;
+    RNE_Signal signal;
 
-    SP_Str id;
     SP_Str text;
     u32 last_touched;
-    RNE_Signal signal;
 
     RNE_WidgetRenderFunc render_func;
     void* render_userdata;

@@ -7,6 +7,166 @@
 
 RNE_Context ctx = {0};
 
+enum {
+    WIDGET_DEAD,
+    WIDGET_ALIVE,
+};
+
+RNE_WidgetMap rne_widget_map_init(SP_Arena* arena) {
+    RNE_WidgetMap map = {
+        .arena = arena,
+        .widgets = {{0}},
+    };
+    return map;
+}
+
+static RNE_Widget* rne_widget_map_new_widget(RNE_WidgetMap* map) {
+    RNE_Widget* new_widget = NULL;
+    if (map->free_stack != NULL) {
+        new_widget = map->free_stack;
+        map->free_stack = new_widget->stack_next;
+    } else {
+        new_widget = sp_arena_push_no_zero(map->arena, sizeof(RNE_Widget));
+    }
+    *new_widget = (RNE_Widget) {
+        .map_state = WIDGET_ALIVE,
+    };
+    return new_widget;
+}
+
+RNE_Widget* rne_widget_map_request(RNE_WidgetMap* map, u64 hash, SP_Str id) {
+    // No ID
+    if (id.len == 0) {
+        RNE_Widget* widget = rne_widget_map_new_widget(map);
+        widget->id = id;
+        widget->hash = 0;
+        widget->stack_next = map->no_id_stack;
+        map->no_id_stack = widget;
+        return widget;
+    }
+
+    u32 index = hash % WIDGET_MAP_COUNT;
+    RNE_Widget* slot = &map->widgets[index];
+
+    if (slot->map_state == WIDGET_DEAD) {
+        u8* id_copy_data = sp_arena_push_no_zero(map->arena, id.len);
+        memcpy(id_copy_data, id.data, id.len);
+        SP_Str id_copy = sp_str(id_copy_data, id.len);
+
+        slot->map_state = WIDGET_ALIVE;
+        slot->map_last = slot;
+        slot->hash = hash;
+        slot->id = id_copy;
+        return slot;
+    }
+
+    for (RNE_Widget* curr = slot; curr != NULL; curr = curr->map_next) {
+        if (curr->hash == hash && sp_str_equal(curr->id, id)) {
+            if (curr->last_touched == ctx.current_frame) {
+                sp_warn("Duplicate ID:s! ('%.*s')", id.len, id.data);
+                RNE_Widget* widget = rne_widget_map_new_widget(map);
+                widget->id = sp_str_lit("");
+                widget->hash = 0;
+                widget->stack_next = map->no_id_stack;
+                map->no_id_stack = widget;
+                return widget;
+            }
+            return curr;
+        }
+    }
+
+    u8* id_copy_data = sp_arena_push_no_zero(map->arena, id.len);
+    memcpy(id_copy_data, id.data, id.len);
+    SP_Str id_copy = sp_str(id_copy_data, id.len);
+
+    RNE_Widget* new_widget = rne_widget_map_new_widget(map);
+    new_widget->id = id_copy;
+    new_widget->hash = hash;
+
+    // Insert into back of list
+    slot->map_last->map_next = new_widget;
+    new_widget->map_prev = slot->map_last;
+    slot->map_last = new_widget;
+
+    return new_widget;
+}
+
+static void rne_widget_map_remove(RNE_WidgetMap* map, RNE_Widget* widget) {
+    // First widget in linked list
+    if (widget->map_prev == NULL) {
+        if (widget->map_next == NULL) {
+            widget->map_state = WIDGET_DEAD;
+        } else {
+            RNE_Widget* free_widget = widget->map_next;
+            if (free_widget->map_next != NULL) {
+                free_widget->map_next->map_prev = free_widget->map_prev;
+            }
+
+            RNE_Widget* last = widget->map_last;
+            if (free_widget == last) {
+                widget->map_last = free_widget->map_prev;
+            }
+
+            *widget = *free_widget;
+            widget->map_last = last;
+            widget->map_prev = NULL;
+
+            free_widget->stack_next = map->free_stack;
+            map->free_stack = free_widget;
+            free_widget->map_state = WIDGET_DEAD;
+        }
+    } else {
+        u32 slot_index = widget->hash % WIDGET_MAP_COUNT;
+        RNE_Widget* slot = &map->widgets[slot_index];
+        sp_assert(slot != widget, "Widget shouldn't be first in list!");
+        if (widget == slot->map_last) {
+            slot->map_last = widget->map_prev;
+        }
+
+        widget->map_prev->next = widget->map_next;
+        if (widget->map_next != NULL) {
+            widget->map_next->prev = widget->map_prev;
+        }
+
+        widget->stack_next = map->free_stack;
+        map->free_stack = widget;
+        widget->map_state = WIDGET_DEAD;
+    }
+}
+
+// Needs to be called AFTER the last widget tree is done being used but BEFORE
+// it has started being recreated, otherwise there will be cycles within the
+// linked list.
+void rne_widget_map_cleanup(RNE_WidgetMap* map) {
+    while (map->no_id_stack != NULL) {
+        RNE_Widget* no_id = map->no_id_stack;
+        map->no_id_stack = no_id->stack_next;
+
+        no_id->stack_next = map->free_stack;
+        map->free_stack = no_id;
+    }
+
+    RNE_Widget* remove_stack = NULL;
+    for (u32 i = 0; i < WIDGET_MAP_COUNT; i++) {
+        for (RNE_Widget* curr = &map->widgets[i]; curr != NULL; curr = curr->map_next) {
+            if (curr->map_state == WIDGET_DEAD) {
+                continue;
+            }
+
+            sp_assert(curr->id.len > 0, "No ID widgets shouldn't be in map.");
+            if (curr->last_touched + 2 <= ctx.current_frame) {
+                sp_sll_stack_push_nz(remove_stack, curr, stack_next, sp_null_check);
+            }
+        }
+    }
+
+    while (remove_stack != NULL) {
+        RNE_Widget* widget = remove_stack;
+        remove_stack = remove_stack->stack_next;
+        rne_widget_map_remove(map, widget);
+    }
+}
+
 // Prints out header code for managing widget style stacks (push, pop, next and
 // top) to stdout.
 void generate_header_functions(void) {
@@ -53,7 +213,7 @@ void rne_init(RNE_StyleStack default_style_stack, RNE_TextMeasureFunc text_measu
     sp_arena_tag(ctx.frame_arenas[0], sp_str_lit("ui-frame-0"));
     sp_arena_tag(ctx.frame_arenas[1], sp_str_lit("ui-frame-1"));
 
-    ctx.widget_map = sp_hash_map_create(sp_hash_map_desc_str(sp_arena_allocator(ctx.arena), 4096, SP_HASH_COLLISION_RESOLUTION_SEPARATE_CHAINING, RNE_Widget*));
+    ctx.widget_map = rne_widget_map_init(ctx.arena);
 
     // generate_header_functions();
 }
@@ -171,7 +331,37 @@ static void process_signal(RNE_Widget* widget) {
     }
 }
 
+#define check_cyclical(widget, first_run) _check_cyclical(widget, first_run, __FILE__, __LINE__)
+static void _check_cyclical(RNE_Widget* widget, b8 first_run, const char* file, u32 line) {
+    if (widget == NULL) {
+        return;
+    }
+
+    static RNE_Widget* already_seen[4096] = {0};
+    static u32 seen_i = 0;
+    if (first_run) {
+        seen_i = 0;
+    }
+
+    for (u32 i = 0; i < seen_i; i++) {
+        if (widget == already_seen[i]) {
+            _sp_log_internal(SP_LOG_LEVEL_TRACE, file, line, "Cycle detected!");
+            abort();
+        }
+    }
+
+    already_seen[seen_i] = widget;
+    seen_i++;
+
+    _check_cyclical(widget->child_first, false, file, line);
+    _check_cyclical(widget->next, false, file, line);
+}
+
 void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
+    ctx.current_frame++;
+
+    check_cyclical(&ctx.container, true);
+
     SP_Arena* arena = rne_get_frame_arena();
     sp_arena_clear(arena);
 
@@ -186,6 +376,7 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     process_signal(signal_widget);
     reset_signals(&ctx.container, signal_widget);
 
+    rne_widget_map_cleanup(&ctx.widget_map);
     ctx.container = (RNE_Widget) {
         .id = sp_str_lit("(root_container)"),
         .size = {
@@ -401,43 +592,11 @@ static void build_positions(RNE_Widget* widget, SP_Vec2 relative_position) {
 }
 
 void rne_end(void) {
-    ctx.current_frame++;
-
     build_intrinsic_size(&ctx.container);
     build_parent_size(&ctx.container);
     solve_size_violations(&ctx.container);
     assign_child_size_sum(&ctx.container);
     build_positions(&ctx.container, sp_v2s(0.0f));
-
-    RNE_Widget* remove_stack = NULL;
-    for (SP_HashMapIter i = sp_hash_map_iter_init(ctx.widget_map);
-            sp_hash_map_iter_valid(i);
-            i = sp_hash_map_iter_next(i)) {
-        RNE_Widget* widget = NULL;
-        sp_hash_map_iter_get_value(i, &widget);
-        sp_assert(widget->id.len != 0, "No ID widgets shouldn't be in the map.");
-        if (widget->last_touched + 2 <= ctx.current_frame) {
-            sp_sll_stack_push_nz(remove_stack, widget, stack_next, sp_null_check);
-        }
-    }
-
-    while (remove_stack != NULL) {
-        RNE_Widget* widget = remove_stack;
-        RNE_Widget* removed;
-        sp_hash_map_remove(ctx.widget_map, &widget->id, &removed);
-        sp_assert(removed == widget, "Widget (%.*s) removed from map doesn't match dead widget. %p, %p", widget->id.len, widget->id.data, widget, removed);
-        sp_sll_stack_pop_nz(remove_stack, stack_next, sp_null_check);
-        sp_sll_stack_push_nz(ctx.widget_free_stack, widget, stack_next, sp_null_check);
-    }
-
-    while (ctx.widget_no_id_stack != NULL) {
-        RNE_Widget* widget = ctx.widget_no_id_stack;
-        if (widget->id.len != 0) {
-            sp_debug("Uhhhhh");
-        }
-        sp_sll_stack_pop_nz(ctx.widget_no_id_stack, stack_next, sp_null_check);
-        sp_sll_stack_push_nz(ctx.widget_free_stack, widget, stack_next, sp_null_check);
-    }
 }
 
 static void rne_draw_helper(RNE_DrawCmdBuffer* buffer, RNE_Widget* widget) {
@@ -547,78 +706,50 @@ static void parse_text(SP_Str text, SP_Str* id, SP_Str* display_text) {
     }
 }
 
-static RNE_Widget* new_widget(void) {
-    RNE_Widget* widget;
-    if (ctx.widget_free_stack != NULL) {
-        widget = ctx.widget_free_stack;
-        sp_sll_stack_pop_nz(ctx.widget_free_stack, stack_next, sp_null_check);
-        widget->stack_next = NULL;
-    } else {
-        widget = sp_arena_push(ctx.arena, sizeof(RNE_Widget));
-    }
-    return widget;
-}
-
-static RNE_Widget* widget_from_id(SP_Str* id) {
-    // TODO: ID stacks so duplicate IDs only happen within the same parent
-
-    RNE_Widget* widget = NULL;
-    sp_hash_map_get(ctx.widget_map, id, &widget);
-
-    // New ID
-    if (widget == NULL) {
-        widget = new_widget();
-        if (id->len == 0) {
-            *id = sp_str_lit("");
-            sp_sll_stack_push_nz(ctx.widget_no_id_stack, widget, stack_next, sp_null_check);
-        } else {
-            // ID must be alive as long as the widget is.
-            u8* id_data = sp_arena_push_no_zero(ctx.arena, id->len);
-            memcpy(id_data, id->data, id->len);
-            *id = sp_str(id_data, id->len);
-            sp_hash_map_insert(ctx.widget_map, id, &widget);
-        }
-    }
-    // Duplicate ID
-    else if (widget->last_touched == ctx.current_frame) {
-        sp_warn("Duplicate ID '%.*s'!", id->len, id->data);
-        widget = new_widget();
-        *id = sp_str_lit("");
-        sp_sll_stack_push_nz(ctx.widget_no_id_stack, widget, stack_next, sp_null_check);
-    }
-
-    return widget;
-}
-
 RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
     SP_Arena* arena = rne_get_frame_arena();
     SP_Str text_copy = sp_str_pushf(sp_arena_allocator(arena), "%.*s", text.len, text.data);
     SP_Str id, display_text;
     parse_text(text_copy, &id, &display_text);
 
-    RNE_Widget* widget = widget_from_id(&id);
-
     RNE_Widget* parent = rne_top_parent();
+    u64 hash = parent->hash + sp_fvn1a_hash(id.data, id.len);
+    RNE_Widget* widget = rne_widget_map_request(&ctx.widget_map, hash, id);
     *widget = (RNE_Widget) {
         .parent = parent,
-        .flags = flags,
-        .id = id,
-        .text = display_text,
-        .last_touched = ctx.current_frame,
+
+        .next = NULL,
+        .prev = NULL,
+
+        .child_first = NULL,
+        .child_last = NULL,
+
+        .hash = widget->hash,
+        .id = widget->id,
+        .map_state = widget->map_state,
+        .map_next = widget->map_next,
+        .map_prev = widget->map_prev,
+        .map_last = widget->map_last,
         .stack_next = widget->stack_next,
 
+        .flags = flags,
         .size = {
             rne_top_width(),
             rne_top_height(),
         },
 
         // Retain possible state from the last frame
+        .computed_relative_position = widget->computed_relative_position,
         .computed_absolute_position = widget->computed_absolute_position,
-        .computed_inner_size = widget->computed_inner_size,
+        .computed_inner_position = widget->computed_inner_position,
         .computed_outer_size = widget->computed_outer_size,
+        .computed_inner_size = widget->computed_inner_size,
         .view_offset = widget->view_offset,
         .child_size_sum = widget->child_size_sum,
         .signal = widget->signal,
+
+        .text = display_text,
+        .last_touched = ctx.current_frame,
 
         .bg = rne_top_bg(),
         .fg = rne_top_fg(),
@@ -632,6 +763,9 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
     };
 
     sp_dll_push_back(parent->child_first, parent->child_last, widget);
+
+    check_cyclical(&ctx.container, true);
+
     return widget;
 }
 
@@ -642,55 +776,6 @@ void rne_widget_equip_render_func(RNE_Widget* widget, RNE_WidgetRenderFunc func,
 
 RNE_Signal rne_signal(RNE_Widget* widget) {
     return widget->signal;
-
-    // if (!(widget->flags & RNE_WIDGET_FLAG_INTERACTIVE)) {
-    //     return (RNE_Signal) {0};
-    // }
-    //
-    // // TODO: Occlusion. Two interactive elements on top of eachother isn't
-    // // handled right now.
-    //
-    // SP_Vec2 mpos = ctx.mouse.pos;
-    // f32 left = widget->computed_absolute_position.x;
-    // f32 right = left + widget->computed_outer_size.x;
-    // f32 top = widget->computed_absolute_position.y;
-    // f32 bottom = top + widget->computed_outer_size.y;
-    //
-    // b8 hovered = mpos.x > left && mpos.x < right && mpos.y < bottom && mpos.y > top;
-    // b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
-    // if (pressed && ctx.focused_widget == NULL) {
-    //     ctx.focused_widget = widget;
-    // }
-    // b8 focused = widget == ctx.focused_widget;
-    // b8 just_pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed;
-    // b8 just_released = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_released;
-    // SP_Vec2 drag = sp_v2s(0.0f);
-    // if (focused) {
-    //     drag = ctx.mouse.pos_delta;
-    // }
-    // f32 scroll = 0.0f;
-    // if (hovered) {
-    //     scroll = ctx.mouse.scroll;
-    // }
-    //
-    // if (widget->flags & RNE_WIDGET_FLAG_VIEW_SCROLL) {
-    //     f32 child_height = widget->child_size_sum.y;
-    //     f32 view_height = widget->computed_inner_size.y;
-    //     f32 scroll_bound = child_height - view_height;
-    //     widget->view_offset.y += scroll * 32.0f;
-    //     widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);
-    // }
-    //
-    // RNE_Signal signal = {
-    //     .hovered = hovered,
-    //     .pressed = pressed,
-    //     .just_pressed = just_pressed,
-    //     .just_released = just_released,
-    //     .focused = focused,
-    //     .drag = drag,
-    //     .scroll = scroll,
-    // };
-    // return signal;
 }
 
 RNE_Offset rne_offset(SP_Vec2 pixels, SP_Vec2 percent) {

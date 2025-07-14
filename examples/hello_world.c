@@ -235,7 +235,7 @@ i32 main(void) {
         rne_next_bg(GB_BG_H);
         rne_next_padding(sp_v4s(16.0f));
         rne_next_corner_radius(sp_v4s(16.0f));
-        RNE_Widget* column = rne_widget(sp_str_lit("col"), RNE_WIDGET_FLAG_DRAW_BACKGROUND |
+        RNE_Widget* column = rne_widget(RNE_NULL_ID, RNE_WIDGET_FLAG_DRAW_BACKGROUND |
                 RNE_WIDGET_FLAG_FIXED);
         rne_push_parent(column);
         {

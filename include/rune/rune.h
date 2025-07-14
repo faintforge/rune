@@ -201,6 +201,8 @@ extern void rne_draw_scissor(RNE_DrawCmdBuffer* buffer, RNE_DrawScissor scissor)
 // functions (see: STYLE STACK OPERATIONS).
 // =============================================================================
 
+#define RNE_NULL_ID sp_str_lit("")
+
 typedef enum RNE_WidgetFlags {
     RNE_WIDGET_FLAG_NONE            = 0,
     RNE_WIDGET_FLAG_DRAW_TEXT       = 1 << 0,

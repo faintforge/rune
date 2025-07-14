@@ -332,36 +332,8 @@ static void process_signal(RNE_Widget* widget) {
     }
 }
 
-#define check_cyclical(widget, first_run) _check_cyclical(widget, first_run, __FILE__, __LINE__)
-static void _check_cyclical(RNE_Widget* widget, b8 first_run, const char* file, u32 line) {
-    if (widget == NULL) {
-        return;
-    }
-
-    static RNE_Widget* already_seen[4096] = {0};
-    static u32 seen_i = 0;
-    if (first_run) {
-        seen_i = 0;
-    }
-
-    for (u32 i = 0; i < seen_i; i++) {
-        if (widget == already_seen[i]) {
-            _sp_log_internal(SP_LOG_LEVEL_TRACE, file, line, "Cycle detected!");
-            abort();
-        }
-    }
-
-    already_seen[seen_i] = widget;
-    seen_i++;
-
-    _check_cyclical(widget->child_first, false, file, line);
-    _check_cyclical(widget->next, false, file, line);
-}
-
 void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     ctx.current_frame++;
-
-    check_cyclical(&ctx.container, true);
 
     SP_Arena* arena = rne_get_frame_arena();
     sp_arena_clear(arena);
@@ -707,6 +679,15 @@ static void parse_text(SP_Str text, SP_Str* id, SP_Str* display_text) {
     }
 }
 
+static void pop_next_stacks(void) {
+    #define X(name_upper, name_lower, type) \
+        if (ctx.name_lower##_stack->pop_next) { \
+            sp_sll_stack_pop(ctx.name_lower##_stack); \
+        }
+    LIST_STYLE_STACKS
+    #undef X
+}
+
 RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
     SP_Arena* arena = rne_get_frame_arena();
     SP_Str text_copy = sp_str_pushf(sp_arena_allocator(arena), "%.*s", text.len, text.data);
@@ -765,7 +746,7 @@ RNE_Widget* rne_widget(SP_Str text, RNE_WidgetFlags flags) {
 
     sp_dll_push_back(parent->child_first, parent->child_last, widget);
 
-    check_cyclical(&ctx.container, true);
+    pop_next_stacks();
 
     return widget;
 }
@@ -831,11 +812,7 @@ LIST_STYLE_STACKS
 #define X(name_upper, name_lower, type) \
     type rne_top_##name_lower(void) { \
         sp_assert(ctx.name_lower##_stack != NULL, "All " #name_lower " have been popped off of the style stack."); \
-        type value = ctx.name_lower##_stack->value; \
-        if (ctx.name_lower##_stack->pop_next) { \
-            sp_sll_stack_pop(ctx.name_lower##_stack); \
-        } \
-        return value; \
+        return ctx.name_lower##_stack->value; \
     }
 LIST_STYLE_STACKS
 #undef X

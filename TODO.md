@@ -1,6 +1,6 @@
 # TODO
 - [x] Padding.
-- [ ] Make 'top' not consume the 'next' style, only have 'rne_widget' have that
+- [x] Make 'top' not consume the 'next' style, only have 'rne_widget' have that
 effect.
 - [x] Click testing/occlusion testing for widget signaling.
 - [x] Floating vs fixed positioning.

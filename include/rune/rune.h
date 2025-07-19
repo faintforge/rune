@@ -263,10 +263,15 @@ struct RNE_Offset {
 typedef struct RNE_Signal RNE_Signal;
 struct RNE_Signal {
     b8 hovered;
+
     b8 pressed;
     b8 just_pressed;
     b8 just_released;
+
     b8 focused;
+    b8 just_lost_focus;
+    b8 just_focused;
+
     b8 active;
     SP_Vec2 drag;
     f32 scroll;

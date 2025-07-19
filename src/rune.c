@@ -306,17 +306,24 @@ static void process_signal(RNE_Widget* widget) {
         mpos.y > top;
 
     b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
+    b8 focused = widget == ctx.focused_widget;
 
-    widget->signal = (RNE_Signal) {
+    RNE_Signal new_signal = {
         .hovered = hovered,
+
         .just_pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_pressed,
         .just_released = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].first_frame_released,
         .pressed = pressed,
-        .focused = widget == ctx.focused_widget,
+
+        .focused = focused,
+        .just_focused = focused && !widget->signal.just_focused,
+        .just_lost_focus = !focused && widget->signal.just_focused,
+
         .active = widget == ctx.active_widget,
         .scroll = hovered && ctx.mouse.scroll,
         .drag = pressed ? ctx.mouse.pos_delta : sp_v2s(0.0f),
     };
+    widget->signal = new_signal;
 
     if (widget->flags & RNE_WIDGET_FLAG_VIEW_SCROLL) {
         f32 child_height = widget->child_size_sum.y;
@@ -340,10 +347,10 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
 
     process_mouse(mouse);
     if (!ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down) {
-        ctx.focused_widget = NULL;
+        ctx.active_widget = NULL;
     }
-    RNE_Widget* signal_widget = ctx.focused_widget;
-    if (ctx.focused_widget == NULL) {
+    RNE_Widget* signal_widget = ctx.active_widget;
+    if (ctx.active_widget == NULL) {
         signal_widget = hit_testing(&ctx.container);
     }
     process_signal(signal_widget);

@@ -136,8 +136,10 @@ i32 main(void) {
     const SP_Color GB_BG1 = sp_color_rgb_hex(0x3c3836);
     const SP_Color GB_BG2 = sp_color_rgb_hex(0x504945);
     const SP_Color GB_FG = sp_color_rgb_hex(0xebdbb2);
-    const SP_Color GB_GREEN = sp_color_rgb_hex(0xb8bb26);
     const SP_Color GB_RED = sp_color_rgb_hex(0xfb4934);
+    const SP_Color GB_GREEN = sp_color_rgb_hex(0xb8bb26);
+    const SP_Color GB_YELLOW = sp_color_rgb_hex(0xfabd2f);
+    const SP_Color GB_BLUE = sp_color_rgb_hex(0x83a598);
 
     // Create window
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
@@ -258,12 +260,15 @@ i32 main(void) {
             rne_widget_equip_render_func(interactive, draw_border_func, NULL);
 
             RNE_Signal signal = rne_signal(interactive);
-            if (signal.hovered) {
-                interactive->fg = GB_RED;
-                if (signal.pressed) { interactive->bg = GB_BG_H; }
-                if (signal.just_pressed) { sp_info("Pressed"); }
-                if (signal.just_released) { sp_info("Released"); }
-            }
+            if (signal.hovered) { interactive->fg = GB_RED; }
+            if (signal.just_focused) { sp_info("Focused"); }
+            if (signal.just_lost_focus) { sp_info("Lost focus"); }
+
+            if (signal.focused) { interactive->fg = GB_BLUE; }
+            if (signal.active) { interactive->fg = GB_YELLOW; }
+            if (signal.pressed) { interactive->bg = GB_BG_H; }
+            if (signal.just_pressed) { sp_info("Pressed"); }
+            if (signal.just_released) { sp_info("Released"); }
 
             rne_next_width(RNE_SIZE_TEXT(1.0f));
             rne_next_height(RNE_SIZE_TEXT(1.0f));

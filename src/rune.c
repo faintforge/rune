@@ -242,18 +242,16 @@ static void process_mouse(RNE_Mouse mouse) {
     ctx.mouse = old;
 }
 
-static void reset_signals(RNE_Widget* widget, RNE_Widget* hit_widget) {
+static void reset_signals(RNE_Widget* widget) {
     if (widget == NULL) {
         return;
     }
-    if (widget != hit_widget) {
-        widget->signal = (RNE_Signal) {
-            .focused = widget == ctx.focused_widget,
-            .active = widget == ctx.active_widget,
-        };
-    }
-    reset_signals(widget->next, hit_widget);
-    reset_signals(widget->child_first, hit_widget);
+    widget->signal = (RNE_Signal) {
+        .focused = widget == ctx.focused_widget,
+        .active = widget == ctx.active_widget,
+    };
+    reset_signals(widget->next);
+    reset_signals(widget->child_first);
 }
 
 static RNE_Widget* hit_testing(RNE_Widget* widget) {
@@ -306,6 +304,14 @@ static void process_signal(RNE_Widget* widget) {
         mpos.y > top;
 
     b8 pressed = hovered && ctx.mouse.buttons[RNE_MOUSE_BUTTON_LEFT].down;
+    if (pressed) {
+        if (ctx.focused_widget != NULL && ctx.focused_widget != widget) {
+            ctx.focused_widget->signal.just_lost_focus = true;
+        }
+        ctx.focused_widget = widget;
+        ctx.active_widget = widget;
+    }
+
     b8 focused = widget == ctx.focused_widget;
 
     RNE_Signal new_signal = {
@@ -316,8 +322,8 @@ static void process_signal(RNE_Widget* widget) {
         .pressed = pressed,
 
         .focused = focused,
-        .just_focused = focused && !widget->signal.just_focused,
-        .just_lost_focus = !focused && widget->signal.just_focused,
+        .just_focused = focused && !widget->signal.focused,
+        .just_lost_focus = !focused && widget->signal.focused,
 
         .active = widget == ctx.active_widget,
         .scroll = hovered && ctx.mouse.scroll,
@@ -331,11 +337,6 @@ static void process_signal(RNE_Widget* widget) {
         f32 scroll_bound = child_height - view_height;
         widget->view_offset.y += widget->signal.scroll * 32.0f;
         widget->view_offset.y = sp_clamp(widget->view_offset.y, -scroll_bound, 0.0f);
-    }
-
-    if (pressed) {
-        ctx.focused_widget = widget;
-        ctx.active_widget = widget;
     }
 }
 
@@ -353,8 +354,8 @@ void rne_begin(SP_Ivec2 container_size, RNE_Mouse mouse) {
     if (ctx.active_widget == NULL) {
         signal_widget = hit_testing(&ctx.container);
     }
+    reset_signals(&ctx.container);
     process_signal(signal_widget);
-    reset_signals(&ctx.container, signal_widget);
 
     rne_widget_map_cleanup(&ctx.widget_map);
     ctx.container = (RNE_Widget) {

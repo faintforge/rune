@@ -93,13 +93,15 @@ RNE_Widget* rne_widget_map_request(RNE_WidgetMap* map, u64 hash, SP_Str id) {
 
 static void rne_widget_map_remove(RNE_WidgetMap* map, RNE_Widget* widget) {
     // First widget in linked list
-    if (widget->map_prev == NULL) {
-        if (widget->map_next == NULL) {
+    if (widget->map_prev == NULL) { if (widget->map_next == NULL) {
             widget->map_state = WIDGET_DEAD;
         } else {
             RNE_Widget* free_widget = widget->map_next;
             if (free_widget->map_next != NULL) {
                 free_widget->map_next->map_prev = free_widget->map_prev;
+            }
+            if (free_widget->map_prev != NULL) {
+                free_widget->map_prev->map_next = free_widget->map_next;
             }
 
             RNE_Widget* last = widget->map_last;
@@ -123,9 +125,9 @@ static void rne_widget_map_remove(RNE_WidgetMap* map, RNE_Widget* widget) {
             slot->map_last = widget->map_prev;
         }
 
-        widget->map_prev->next = widget->map_next;
+        widget->map_prev->map_next = widget->map_next;
         if (widget->map_next != NULL) {
-            widget->map_next->prev = widget->map_prev;
+            widget->map_next->map_prev = widget->map_prev;
         }
 
         widget->stack_next = map->free_stack;
@@ -323,7 +325,7 @@ static void process_signal(RNE_Widget* widget) {
 
         .focused = focused,
         .just_focused = focused && !widget->signal.focused,
-        .just_lost_focus = !focused && widget->signal.focused,
+        .just_lost_focus = false,
 
         .active = widget == ctx.active_widget,
         .scroll = hovered && ctx.mouse.scroll,
